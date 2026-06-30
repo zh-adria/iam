@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet id="001-create-tables" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="iam_user"/></not></preConditions>
+
+        <createTable tableName="iam_tenant">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="code" type="varchar(32)"><constraints nullable="false" unique="true"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="isolation_mode" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="schema_name" type="varchar(64)"/>
+            <column name="ldap_url" type="varchar(255)"/>
+            <column name="ldap_base" type="varchar(255)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="iam_user">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="username" type="varchar(64)"><constraints nullable="false" unique="true"/></column>
+            <column name="password_hash" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="email" type="varchar(128)"/>
+            <column name="phone" type="varchar(32)"/>
+            <column name="id_card" type="varchar(18)"/>
+            <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="int" defaultValueNumeric="1"><constraints nullable="false"/></column>
+            <column name="mfa_secret" type="varchar(255)"/>
+            <column name="mfa_enabled" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="fail_count" type="int" defaultValueNumeric="0"/>
+            <column name="locked_until" type="timestamp"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createTable tableName="iam_role">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="code" type="varchar(64)"><constraints nullable="false" unique="true"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="tenant_code" type="varchar(32)"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="iam_permission">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="code" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
+            <column name="type" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"/>
+            <column name="resource" type="varchar(255)"/>
+            <column name="action" type="varchar(32)"/>
+            <column name="spel_expression" type="text"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="iam_user_role">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+            <column name="role_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="granted_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="iam_user_role" columnNames="user_id,role_code"/>
+        <createIndex indexName="idx_ur_user" tableName="iam_user_role">
+            <column name="user_id" type="bigint"/>
+        </createIndex>
+
+        <createTable tableName="iam_role_permission">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="role_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="perm_code" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="granted_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="iam_role_permission" columnNames="role_code,perm_code"/>
+
+        <createTable tableName="iam_oauth2_client">
+            <column name="client_id" type="varchar(64)"><constraints primaryKey="true"/></column>
+            <column name="client_secret_hash" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="grant_types" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="redirect_uris" type="text"/>
+            <column name="scopes" type="text"/>
+            <column name="access_token_ttl_minutes" type="int" defaultValueNumeric="30"><constraints nullable="false"/></column>
+            <column name="refresh_token_ttl_days" type="int" defaultValueNumeric="30"><constraints nullable="false"/></column>
+            <column name="auto_approve" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="iam_refresh_token">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="token" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
+            <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+            <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="client_id" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="scopes" type="text"><constraints nullable="false"/></column>
+            <column name="expires_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="issued_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="revoked_at" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_rt_token" tableName="iam_refresh_token"><column name="token" type="varchar(128)"/></createIndex>
+        <createIndex indexName="idx_rt_user" tableName="iam_refresh_token"><column name="user_id" type="bigint"/></createIndex>
+
+        <createTable tableName="iam_audit_log">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="user_id" type="bigint"/>
+            <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="action" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="result" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="principal" type="varchar(128)"/>
+            <column name="ip" type="varchar(64)"/>
+            <column name="detail" type="text"/>
+            <column name="occurred_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="hash_chain_prev" type="varchar(128)"/>
+        </createTable>
+        <createIndex indexName="idx_audit_user" tableName="iam_audit_log"><column name="user_id" type="bigint"/></createIndex>
+        <createIndex indexName="idx_audit_time" tableName="iam_audit_log"><column name="occurred_at" type="timestamp"/></createIndex>
+
+        <createTable tableName="iam_social_binding">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+            <column name="provider" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="provider_user_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="provider_username" type="varchar(255)"/>
+            <column name="bound_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="iam_social_binding" columnNames="provider,provider_user_id"/>
+        <createIndex indexName="idx_sb_user" tableName="iam_social_binding"><column name="user_id" type="bigint"/></createIndex>
+    </changeSet>
+</databaseChangeLog>
