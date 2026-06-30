@@ -1,0 +1,1308 @@
+# IAM Platform — 认证协议操作手册
+
+> 版本：1.0.0 · 更新：2026-06-30
+> 配套：[PRD.md](./PRD.md) · [TECH.md](./TECH.md) · [OPS.md](./OPS.md)
+>
+> 本手册覆盖代码里实际实现的所有认证协议（13 类）。每节统一模板：
+> **端点表 → 请求示例 → 响应示例 → 配置项 → 演示触发路径 → 已知限制 / 扩展点**。
+>
+> 所有 curl 命令在 dev 模式（`./scripts/dev.bat` 已启动）下可直接复制运行。
+
+---
+
+## 0. 通用约定
+
+### 服务地址
+
+| 服务 | Base URL | context-path | 说明 |
+|------|----------|--------------|------|
+| iam-auth-server | `http://localhost:8080/iam` | `/iam` | 所有认证协议端点 |
+| iam-admin | `http://localhost:8081/iam` | `/iam` | 管理 CRUD（`/admin/api/*`） |
+| frontend | `http://localhost:5173` | — | Vue3 SPA |
+
+### 响应信封
+
+所有 `/api/**` JSON 端点统一返回 `ApiResult<T>`：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": null,
+  "data": { ... },
+  "meta": null
+}
+```
+
+失败时 `success=false`、`code` 为错误码、`message` 为人类可读说明。`/oauth/**` 和 `/scim/**` 按 RFC 返回裸 JSON，不套信封。
+
+### 演示账号
+
+| 账号 | 密码 | 角色 | 用途 |
+|------|------|------|------|
+| `admin` | `Iam@2026` | `ROLE_ADMIN` | 全部协议测试 |
+| `alice` | `User@2026` | `ROLE_USER` | 普通用户视角 |
+| OAuth2 client | `demo-client` / `demo-secret` | — | 授权码流程 |
+
+### 通用请求头
+
+```
+Content-Type: application/json
+Authorization: Bearer <accessToken>     # 受保护端点必填
+X-Forwarded-For: <真实客户端 IP>         # 反向代理后必填，否则限流按代理 IP 算
+```
+
+---
+
+## 1. 密码登录 + JWT
+
+最基础的登录方式，签发 access + refresh token。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/auth/login` | 公开 | 用户名密码登录；MFA 启用后返回 mfaToken |
+| POST | `/api/auth/refresh` | 公开 | 用 refresh token 换新 access token（旋转） |
+| POST | `/api/auth/logout` | Bearer | 把 access token 的 jti 加入 Redis 黑名单 |
+| GET  | `/api/auth/me` | Bearer | 返回当前 principal |
+
+### 请求示例
+
+```bash
+# 登录
+curl -X POST http://localhost:8080/iam/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Iam@2026","tenantCode":"default"}'
+```
+
+```bash
+# 刷新
+curl -X POST http://localhost:8080/iam/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<上一步拿到的 refreshToken>","clientId":"iam-self"}'
+```
+
+```bash
+# 登出
+curl -X POST http://localhost:8080/iam/api/auth/logout \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+```bash
+# 当前用户
+curl http://localhost:8080/iam/api/auth/me \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+### 响应示例
+
+登录成功（无 MFA）：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzM4NCJ9...",
+    "refreshToken": "b53a64e134bc4c5b84871af5f606c708.1",
+    "idToken": null,
+    "tokenType": "Bearer",
+    "expiresIn": 1800,
+    "mfaRequired": false,
+    "mfaToken": null,
+    "roles": ["ROLE_ADMIN"],
+    "permissions": ["iam:client:create","iam:role:create","iam:role:grant","iam:user:assign-role","iam:menu:dashboard","iam:permission:create"]
+  }
+}
+```
+
+登录成功（已启用 MFA，先发 mfaToken）：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "accessToken": null,
+    "refreshToken": null,
+    "mfaRequired": true,
+    "mfaToken": "<5 分钟有效的 MFA 续登 token>"
+  }
+}
+```
+
+登录失败：
+
+```json
+{ "success": false, "code": "BAD_CREDENTIALS", "message": "用户名或密码错误" }
+{ "success": false, "code": "LOCKED", "message": "账号已锁定，请稍后重试" }
+{ "success": false, "code": "RATE_LIMITED", "message": "登录过于频繁，请稍后再试" }
+```
+
+### 配置项
+
+| Key | 默认 | 说明 |
+|-----|------|------|
+| `iam.jwt.secret` | `CHANGE_ME_...` | HS256 密钥，**生产必改**，≥32 字节 |
+| `iam.jwt.issuer` | `iam-platform` | iss 声明 |
+| `iam.jwt.access-ttl-minutes` | `30` | access token 有效期 |
+| `iam.jwt.refresh-ttl-days` | `7` | refresh token 有效期 |
+| `iam.password.bcrypt-strength` | `10` | BCrypt cost |
+| `iam.password.max-fail-count` | `5` | 连续失败上限，达到后锁定 |
+| `iam.password.lock-minutes` | `30` | 锁定时长 |
+| `iam.ratelimit.login-per-minute` | `10` | 同 IP 每分钟登录次数上限 |
+
+### 演示触发路径
+
+1. 启动 dev：`./scripts/dev.bat`
+2. 上面的登录 curl → 拿到 `accessToken`
+3. 用 `curl /api/auth/me -H "Authorization: Bearer ..."` 验证
+4. 等 30 分钟（或改 `iam.jwt.access-ttl-minutes=1`）后调 `/api/auth/refresh`
+
+### 已知限制 / 扩展点
+
+- HS256 对称密钥，多 RS 验证需共享密钥。**扩展**：切 RS256 + JWKS 端点（见 TECH.md §5）
+- access 撤销依赖 Redis 黑名单；Redis 挂掉时撤销失效（token 仍有效到 TTL）
+- refresh 旋转：每次刷新旧 refresh 立即作废，重放会被检测
+- `LoginCommand` 还支持 `phone`+`smsCode` / `email`+`emailCode` 字段，但 `/api/auth/login` 当前只走 password 分支，其他登录方式有独立端点（见 §8、§9）
+
+---
+
+## 2. MFA / TOTP (RFC 6238)
+
+基于时间的一次性密码，兼容 Google Authenticator / Microsoft Authenticator。**用户级开关**，登录时若启用则先发 mfaToken，二次验证后才发 access token。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/users/mfa/setup` | Bearer | 生成 secret + otpauth URI，写入 user.mfaSecret（未启用） |
+| POST | `/api/users/mfa/confirm` | Bearer | 提交首条 TOTP 验证，启用 MFA |
+| POST | `/api/users/mfa/disable` | Bearer | 关闭 MFA，清空 secret |
+| POST | `/api/auth/mfa/verify` | 公开 | 登录后续登：用 mfaToken + TOTP 换 access token |
+
+### 请求示例
+
+```bash
+# 1. 用户先正常登录（已启用 MFA 的情况），拿到 mfaToken
+# 2. 用 Authenticator 扫 setup 返回的 otpauth URI
+#    或者首次启用：
+TOK=$(curl -s -X POST http://localhost:8080/iam/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"User@2026"}' \
+  | jq -r '.data.accessToken')
+
+# 3. 生成 MFA secret
+curl -X POST http://localhost:8080/iam/api/users/mfa/setup \
+  -H "Authorization: Bearer $TOK"
+# → 返回 { "secret": "...", "otpauth": "otpauth://totp/IAM-Platform:alice?secret=...&issuer=IAM-Platform&algorithm=SHA1&digits=6&period=30" }
+
+# 4. 把 otpauth URI 生成二维码（任何二维码工具），用 Authenticator 扫码
+#    读出当前 6 位 TOTP，提交确认
+curl -X POST http://localhost:8080/iam/api/users/mfa/confirm \
+  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -d '{"code":"123456"}'
+
+# 5. 下次登录会要 MFA
+curl -X POST http://localhost:8080/iam/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"User@2026"}'
+# → { "data": { "mfaRequired": true, "mfaToken": "..." } }
+
+# 6. 用 mfaToken + 当前 TOTP 换 access token
+curl -X POST http://localhost:8080/iam/api/auth/mfa/verify \
+  -H "Content-Type: application/json" \
+  -d '{"mfaToken":"<上一步的 mfaToken>","code":"123456"}'
+```
+
+### 响应示例
+
+setup：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "secret": "JBSWY3DPEHPK3PXP",
+    "otpauth": "otpauth://totp/IAM-Platform:alice?secret=JBSWY3DPEHPK3PXP&issuer=IAM-Platform&algorithm=SHA1&digits=6&period=30"
+  }
+}
+```
+
+verify 成功（与 §1 登录成功响应同形）：
+
+```json
+{ "success": true, "code": "OK", "data": { "accessToken": "...", "refreshToken": "...", "expiresIn": 1800, "mfaRequired": false } }
+```
+
+失败：
+
+```json
+{ "success": false, "code": "MFA_FAIL", "message": "动态码错误" }
+{ "success": false, "code": "MFA_TOKEN_INVALID", "message": "MFA会话已过期" }
+{ "success": false, "code": "NO_SECRET", "message": "请先调用 setupMfa" }
+```
+
+### 配置项
+
+| Key | 默认 | 说明 |
+|-----|------|------|
+| `iam.mfa.totp-issuer` | `IAM-Platform` | otpauth URI 里的 issuer |
+| `iam.mfa.totp-digits` | `6` | TOTP 位数 |
+| `iam.mfa.totp-period` | `30` | 时间步长（秒） |
+
+算法固定 SHA1（与 Google Authenticator 兼容）。
+
+### 演示触发路径
+
+1. 用 `alice` 登录拿 token
+2. `/api/users/mfa/setup` → 拿 otpauth URI
+3. 用任意在线 QR 工具把 otpauth 转二维码，Google Authenticator 扫码
+4. `/api/users/mfa/confirm` 提交当前 6 位码 → MFA 启用
+5. 重新登录 → 返回 mfaToken
+6. `/api/auth/mfa/verify` → 拿 access token
+
+### 已知限制 / 扩展点
+
+- mfaToken 复用 JWT 密钥签名，5 分钟有效，**单次使用未强制**（扩展：写 Redis 标记已用）
+- 无备份码（backup codes）机制 — 用户丢手机就锁死。**扩展**：生成 10 个一次性备份码，BCrypt 存表
+- 无 TOTP 时间漂移容忍窗口（`constantTimeEq` 仅比当前时间窗）。**扩展**：允许 ±1 个时间步
+- 无 U2F / WebAuthn 作为 MFA 因子（见 §12）
+
+---
+
+## 3. OAuth2 授权码 + PKCE
+
+RFC 6749 §4.1 + RFC 7636。最常用的"第三方应用代表用户访问"流程。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET  | `/oauth/authorize` | 浏览器登录态 | 颁发授权码，302 重定向回 client |
+| POST | `/oauth/token` | client_id+secret（机密客户端） | 4 种 grant_type 入口 |
+| POST | `/oauth/introspect` | client_id+secret | RFC 7662 令牌内省 |
+| POST | `/oauth/revoke` | client_id+secret | RFC 7009 令牌撤销 |
+| GET  | `/.well-known/openid-configuration` | 公开 | OIDC discovery（也用于 OAuth2 元数据） |
+| GET  | `/oauth/jwks` | 公开 | JWKS（HS256 模式下返回空 keys） |
+
+### 请求示例
+
+**步骤 1：浏览器打开授权 URL**（需先登录 iam-auth-server，未登录会跳转 `/login?return_to=...`）
+
+```
+http://localhost:8080/iam/oauth/authorize?
+  response_type=code
+  &client_id=demo-client
+  &redirect_uri=http://localhost:5173/oauth2-callback
+  &scope=openid
+  &state=abc123
+  &code_challenge=<BASE64URL(SHA256(code_verifier))>
+  &code_challenge_method=S256
+  &nonce=<random>
+```
+
+**步骤 2：用 code 换 token**（PKCE 必须带 code_verifier）
+
+```bash
+# 生成 PKCE pair（bash）
+VERIFIER=$(openssl rand -base64 32 | tr -d '=' | tr '+/' '-_')
+CHALLENGE=$(echo -n "$VERIFIER" | openssl dgst -sha256 -binary | base64 | tr -d '=' | tr '+/' '-_')
+
+curl -X POST http://localhost:8080/iam/oauth/token \
+  -d "grant_type=authorization_code" \
+  -d "code=<步骤1拿到的 code>" \
+  -d "redirect_uri=http://localhost:5173/oauth2-callback" \
+  -d "client_id=demo-client" \
+  -d "client_secret=demo-secret" \
+  -d "code_verifier=$VERIFIER"
+```
+
+**步骤 3：introspect**
+
+```bash
+curl -X POST http://localhost:8080/iam/oauth/introspect \
+  -d "client_id=demo-client" \
+  -d "client_secret=demo-secret" \
+  -d "token=<accessToken>"
+```
+
+**步骤 4：revoke**
+
+```bash
+curl -X POST http://localhost:8080/iam/oauth/revoke \
+  -d "client_id=demo-client" \
+  -d "client_secret=demo-secret" \
+  -d "token=<refreshToken>"
+```
+
+### 响应示例
+
+`/oauth/token` 成功（裸 JSON，不套 ApiResult）：
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzM4NCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 1800,
+  "refresh_token": "abcdef0123456789.1",
+  "scope": "iam:menu:dashboard iam:role:create ..."
+}
+```
+
+scope 含 `openid` 时多返 `id_token`（见 §4）。
+
+`/oauth/introspect`：
+
+```json
+{
+  "active": true,
+  "client_id": "demo-client",
+  "sub": "admin",
+  "scope": "iam:menu:dashboard iam:role:create ...",
+  "exp": 1782804990,
+  "uid": 1,
+  "tenant": "default"
+}
+```
+
+失败（HTTP 400 + JSON）：
+
+```json
+{ "code": "PKCE_FAILED", "message": "code_verifier 校验失败" }
+{ "code": "INVALID_CODE", "message": "授权码无效或已使用" }
+{ "code": "REDIRECT_NOT_ALLOWED", "message": "redirect_uri 不在白名单" }
+{ "code": "GRANT_NOT_ALLOWED", "message": "客户端未授权该 grant_type" }
+```
+
+### 配置项
+
+OAuth2 客户端在 `oauth2_clients` 表里管理（通过 `/admin/api/oauth2/clients` CRUD），不在 yml。DemoSeeder 已建 `demo-client`。
+
+| 列 | demo-client 值 | 说明 |
+|----|----------------|------|
+| `client_id` | `demo-client` | |
+| `client_secret_hash` | BCrypt of `demo-secret` | |
+| `grant_types` | `authorization_code,refresh_token,password,client_credentials` | 逗号分隔 |
+| `redirect_uris` | `http://localhost:5173/oauth2-callback` | 逗号分隔白名单 |
+| `scopes` | `openid,profile,email,phone,iam:menu:dashboard,...` | 逗号分隔 |
+
+### 演示触发路径
+
+1. 启动 dev
+2. 浏览器登录 `admin/Iam@2026`（前端登录页 → 拿 cookie/localStorage token）
+3. 浏览器打开步骤 1 的 authorize URL → 自动跳回 `redirect_uri?code=...&state=...`
+4. 复制 `code`，跑步骤 2 的 curl → 拿 access + refresh token
+5. 跑步骤 3、4 验证 introspect / revoke
+
+### 已知限制 / 扩展点
+
+- 只支持 `code_challenge_method=S256`（plain 已 deprecated）
+- 授权码 TTL 短（`AuthCodeStore` 默认 60 秒），单次使用
+- 客户端密钥 BCrypt 存，无 PKCE-only public client 模式（OAuth 2.1 趋势）
+- `password` grant 已实现但 OAuth 2.1 deprecated，保留给遗留客户端
+- `client_credentials` grant 签发 `clientId=client:<id>` 的 token，`uid=0`，权限走 client scope
+
+---
+
+## 4. OIDC
+
+OAuth2 + ID Token。当 `/oauth/authorize` 的 scope 含 `openid` 时，`/oauth/token` 多返 `id_token`。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET | `/.well-known/openid-configuration` | 公开 | Discovery 文档 |
+| GET | `/oauth/userinfo` | Bearer | UserInfo 端点 |
+| GET | `/oauth/jwks` | 公开 | JWKS（HS256 下空） |
+
+### 请求示例
+
+```bash
+# Discovery
+curl http://localhost:8080/iam/oauth/.well-known/openid-configuration
+
+# UserInfo（用 §3 拿到的 accessToken，scope 须含 openid）
+curl http://localhost:8080/iam/oauth/userinfo \
+  -H "Authorization: Bearer <accessToken>"
+
+# JWKS
+curl http://localhost:8080/iam/oauth/jwks
+```
+
+### 响应示例
+
+discovery：
+
+```json
+{
+  "issuer": "/iam/oauth",
+  "authorization_endpoint": "/iam/oauth/authorize",
+  "token_endpoint": "/iam/oauth/token",
+  "userinfo_endpoint": "/iam/oauth/userinfo",
+  "jwks_uri": "/iam/oauth/jwks",
+  "introspection_endpoint": "/iam/oauth/introspect",
+  "revocation_endpoint": "/iam/oauth/revoke",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code","refresh_token","password","client_credentials"],
+  "subject_types_supported": ["public"],
+  "id_token_signing_alg_values_supported": ["HS256"],
+  "code_challenge_methods_supported": ["S256"],
+  "scopes_supported": ["openid","profile","email","phone"]
+}
+```
+
+userinfo：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "sub": "1",
+    "preferred_username": "admin",
+    "email": "admin@iam.local",
+    "phone": "13800000001",
+    "tenant": "default"
+  }
+}
+```
+
+jwks（HS256 对称密钥不公开公钥）：
+
+```json
+{ "keys": [] }
+```
+
+### 配置项
+
+无独立配置；复用 `iam.jwt.*`。ID token 用同一个 HS256 密钥签名。
+
+### 演示触发路径
+
+1. 跑 §3 授权码流程，scope 写 `openid profile email`
+2. `/oauth/token` 响应里会多 `id_token` 字段
+3. 解码 id_token（jwt.io 或 `jq` + base64）能看到 `sub`/`aud`/`iss`/`nonce`/`email`/`preferred_username`
+4. 用 access token 调 `/oauth/userinfo` 应返回一致信息
+
+### 已知限制 / 扩展点
+
+- ID token HS256，client 验签需共享密钥。**扩展**：切 RS256 后 jwks 返真实公钥
+- `nonce` 校验由 client 自行做（服务端只写入 id_token，不存）
+- `at_hash`（access token 绑定）未实现 — OIDC spec 3.1.2.6 建议
+- discovery 里 `issuer` 是相对路径 `/iam/oauth`，严格 OIDC 应是绝对 URL `https://host/iam/oauth`。**扩展**：用 `server.forward-headers-strategy=framework` + 绝对 URL
+
+---
+
+## 5. SAML 2.0
+
+SP-initiated SSO，用 Spring Security SAML2。IdP 元数据从 yml 加载，未配置时占位 registration + WARN 日志。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET | `/saml2/authenticate/default` | 公开 | SP-initiated：跳转 IdP 登录 |
+| POST | `/login/saml2/sso/default` | IdP POST | ACS（Assertion Consumer Service），IdP 回调 |
+| GET | `/saml/metadata/default` | 公开 | SP 元数据 XML |
+
+### 请求示例
+
+```bash
+# 1. 浏览器打开（不能 curl，是 302 跳转链）
+http://localhost:8080/iam/saml2/authenticate/default
+# → 跳到 IdP 登录页 → 登录后 IdP POST 回 /login/saml2/sso/default
+# → SamlSuccessHandler 签发 JWT，302 到 frontendRedirect?saml_token=<JWT>
+
+# 2. 拿 SP 元数据（给 IdP 配置用）
+curl http://localhost:8080/iam/saml/metadata/default
+# → XML
+```
+
+### 响应示例
+
+成功后浏览器最终停在：
+
+```
+http://localhost:5173/dashboard?saml_token=<JWT>
+```
+
+JWT 结构与 §1 一致，`cid=saml`。
+
+### 配置项
+
+```yaml
+iam:
+  saml:
+    idp:
+      metadata-url:           # IdP metadata XML 的 URL（Azure AD / Keycloak / Shibboleth 都发布这个）。优先用此字段
+      entity-id:              # IdP entity ID。metadata-url 为空时用此 + sso-url 手动配
+      sso-url:                # IdP SSO 重定向 URL
+    sp:
+      entity-id: urn:iam:sp   # 本 SP 的 entity ID
+      acs-base: http://localhost:8080/iam/login/saml2/sso  # ACS URL（IdP 配置时填这个）
+      frontend-redirect: http://localhost:5173/dashboard  # 登录成功后跳前端
+```
+
+| 场景 | 配置 |
+|------|------|
+| 真实 IdP（推荐） | 只填 `idp.metadata-url` |
+| 手动配 | 填 `idp.entity-id` + `idp.sso-url` |
+| 未配置（dev 默认） | 全空 → 占位 registration，启动 WARN，调 `/saml2/authenticate/default` 会跳到 `localhost:0/placeholder` 失败 |
+
+### 演示触发路径
+
+dev 模式默认未配 IdP，要演示需先搭一个 IdP（Keycloak / docker run `midnighter/simplesamlphp` 都行）：
+
+1. 启动 IdP，拿 metadata URL
+2. 改 `application-dev.yml` 填 `iam.saml.idp.metadata-url`
+3. 在 IdP 配置 SP：把 `http://localhost:8080/iam/saml/metadata/default` 的内容导入 IdP
+4. 重启 auth-server
+5. 浏览器开 `http://localhost:8080/iam/saml2/authenticate/default` → IdP 登录 → 跳回前端 `?saml_token=...`
+
+### 已知限制 / 扩展点
+
+- 单 IdP（registrationId=default）。**扩展**：`RelyingPartyRegistrationRepository` 注入多个 registration，按 `/saml2/authenticate/{registrationId}` 路由
+- 用户首次登录自动 provision（`username=saml_<nameId>`，`password=DISABLED`）。要封闭用户库时关掉自动 provision，改 admin 预绑定
+- token 走 URL query，前端应立即换 cookie/refresh。**扩展**：HttpOnly cookie + SameSite
+- 未做 Signed AuthnRequest / EncryptedAssertion — 高安全场景需配 IdP 证书
+
+---
+
+## 6. CAS 2.0
+
+Apereo CAS 协议（`/login` + `/serviceValidate`）。比 SAML 简单，国内高校 / 政务常用。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET | `/api/auth/cas/authorize` | 公开 | 返回 CAS server 登录 URL（JSON） |
+| GET | `/api/auth/cas/callback` | CAS server 302 | 拿 ticket，校验后签 JWT，302 跳前端 |
+
+### 请求示例
+
+```bash
+# 1. 拿 CAS 登录 URL
+curl http://localhost:8080/iam/api/auth/cas/authorize
+# → { "success": true, "data": "https://cas.example.com/cas/login?service=http%3A%2F%2Flocalhost%3A8080%2Fiam%2Fapi%2Fauth%2Fcas%2Fcallback" }
+
+# 2. 浏览器打开上面的 URL → CAS 登录 → CAS 302 回 /api/auth/cas/callback?ticket=ST-abc-123
+# 3. 服务端 POST {cas.server-url}/serviceValidate?ticket=...&service=... → 解析 XML → 签 JWT
+# 4. 浏览器最终停在 http://localhost:5173/social-callback?token=<JWT>
+```
+
+### 响应示例
+
+authorize：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": "https://cas.example.com/cas/login?service=http%3A%2F%2Flocalhost%3A8080%2Fiam%2Fapi%2Fauth%2Fcas%2Fcallback"
+}
+```
+
+callback 失败（CAS server 不可达 / ticket 无效）：
+
+```json
+{ "success": false, "code": "CAS_NOT_CONFIGURED", "message": "iam.cas.server-url 未配置" }
+{ "success": false, "code": "CAS_FAIL", "message": "ticket 无效" }
+{ "success": false, "code": "CAS_ERROR", "message": "CAS 校验失败: I/O error..." }
+```
+
+### 配置项
+
+```yaml
+iam:
+  cas:
+    server-url:   # CAS server base URL，如 https://cas.example.com/cas。空则禁用
+    service-url: http://localhost:8080/iam/api/auth/cas/callback  # 本 SP 的 service URL
+```
+
+### 演示触发路径
+
+dev 默认 `server-url` 空，调 `/api/auth/cas/authorize` 会返 `CAS_NOT_CONFIGURED`。要演示：
+
+1. docker 起 CAS server：`docker run -p 8443:8443 apereo/cas:6.5`（或本地装一个）
+2. 改 `iam.cas.server-url=https://localhost:8443/cas`
+3. 重启 auth-server
+4. 浏览器开 `/api/auth/cas/authorize` 拿到的 URL → CAS 登录 → 跳回前端带 token
+
+### 已知限制 / 扩展点
+
+- 只支持 CAS 2.0 protocol（`/serviceValidate`）。CAS 3.0 `/p3/serviceValidate` 属性解析未实现 — **扩展**：解析 `cas:attributes` 拿 eduPerson / 邮箱 / 部门
+- 用户首次登录自动 provision（`username=cas_<uid>`）
+- serviceValidate 响应只正则提取 `cas:user`，未验签 — 高安全场景需配 CAS server 证书校验
+
+---
+
+## 7. 社交登录（微信 / 支付宝 / QQ / 钉钉 / 企业微信）
+
+5 个国内 IdP 的 OAuth2-style 接入，统一端点。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET | `/api/auth/social/{provider}/authorize` | 公开 | 返回 provider 授权 URL（JSON） |
+| GET | `/api/auth/social/{provider}/callback` | provider 302 | 拿 code → 换 token → 拿 userinfo → 签 JWT → 302 跳前端 |
+
+`{provider}` ∈ `wechat` / `alipay` / `qq` / `dingtalk` / `wecom`。
+
+### 请求示例
+
+```bash
+# 1. 拿微信授权 URL
+curl http://localhost:8080/iam/api/auth/social/wechat/authorize
+# → { "data": "https://open.weixin.qq.com/connect/qrconnect?appid=...&redirect_uri=...&response_type=code&scope=snsapi_login#wechat_redirect" }
+
+# 2. 浏览器扫码 → 微信 302 回 /api/auth/social/wechat/callback?code=...
+# 3. 服务端拿 code 换 access_token → 拿 openid → find-or-provision 本地用户 → 签 JWT
+# 4. 浏览器最终停在 http://localhost:5173/social-callback?token=<JWT>
+```
+
+### 响应示例
+
+authorize：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": "https://open.weixin.qq.com/connect/qrconnect?appid=wx123&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fiam%2Fapi%2Fauth%2Fsocial%2Fwechat%2Fcallback&response_type=code&scope=snsapi_login#wechat_redirect"
+}
+```
+
+失败：
+
+```json
+{ "success": false, "code": "UNKNOWN_PROVIDER", "message": "不支持的社交 provider: twitter" }
+{ "success": false, "code": "SOCIAL_NOT_CONFIGURED", "message": "wechat 未配置" }
+{ "success": false, "code": "SOCIAL_FAIL", "message": "wechat token exchange failed" }
+{ "success": false, "code": "SOCIAL_NOT_IMPLEMENTED", "message": "alipay 需 RSA2 签名，配置 alipay-sdk 后补实现" }
+```
+
+### 配置项
+
+```yaml
+iam:
+  social:
+    wechat:   { app-id: , app-secret: }            # 微信开放平台
+    alipay:   { app-id: , app-private-key: }       # 支付宝开放平台（RSA2，未实现）
+    qq:       { app-id: , app-key: }               # QQ 互联
+    dingtalk: { app-id: , app-secret: }            # 钉钉
+    wecom:    { corp-id: , agent-id: , corp-secret: }  # 企业微信
+```
+
+provider 对应的 callback URL（去 provider 后台配回填）：
+- `http://localhost:8080/iam/api/auth/social/wechat/callback`
+- `http://localhost:8080/iam/api/auth/social/qq/callback`
+- ...（其余 provider 同形）
+
+### 演示触发路径
+
+dev 模式 5 个 provider 都未配（app-id 空），调 `/api/auth/social/wechat/authorize` 会返 `SOCIAL_NOT_CONFIGURED`。要演示：
+
+1. 微信开放平台申请 appid + appsecret
+2. 填 yml `iam.social.wechat`
+3. 在微信后台配授权回调 `http://localhost:8080/iam/api/auth/social/wechat/callback`
+4. 重启 auth-server
+5. 浏览器开 `/api/auth/social/wechat/authorize` 拿到的 URL → 扫码 → 跳回前端带 token
+
+支付宝 (`alipay`) **当前未实现**：需要 RSA2 签名 + alipay-sdk，代码里抛 `SOCIAL_NOT_IMPLEMENTED`。
+
+### 已知限制 / 扩展点
+
+- 钉钉流程：先 `/v1.0/oauth2/accessToken` 拿应用 token，再 `/v2.0/oauth2/userInfo` 用 code 换 openid
+- 企业微信：`gettoken` + `auth/getuserinfo`
+- QQ：返回 JSONP，`parseJsonpOpenid` 抽 openid
+- 所有 provider 首次登录自动 provision（`username=wechat_<openid前12位>`），通过 `social_bindings` 表关联
+- 回调 callback URL 写死 `localhost:8080`。**扩展**：参数化 `iam.social.callback-base`
+- token 走 URL query 跳前端，安全考虑应改 HttpOnly cookie
+- 支付宝未实现，需补 alipay-sdk + RSA2 签名
+
+---
+
+## 8. SMS 验证码登录
+
+手机号 + 6 位短信验证码。验证码存 Redis，TTL 5 分钟。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/auth/sms/send` | 公开 | 发送验证码（stub 模式打日志） |
+| POST | `/api/auth/sms/login` | 公开 | 验码 + 签 JWT（找不到用户则按手机号 provision） |
+
+### 请求示例
+
+```bash
+# 1. 发送验证码
+curl -X POST http://localhost:8080/iam/api/auth/sms/send \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"13800000001"}'
+# → 服务端日志：[SMS-STUB] send to 13800000001: code=482913 (ttl=300s)
+
+# 2. 从日志拿 code，登录
+curl -X POST http://localhost:8080/iam/api/auth/sms/login \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"13800000001","code":"482913"}'
+```
+
+### 响应示例
+
+send：
+
+```json
+{ "success": true, "code": "OK", "message": "验证码已发送", "data": null }
+```
+
+login 成功：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "accessToken": "...",
+    "tokenType": "Bearer",
+    "expiresIn": 1800,
+    "mfaRequired": false
+  }
+}
+```
+
+失败：
+
+```json
+{ "success": false, "code": "BAD_PHONE", "message": "手机号格式错误" }
+{ "success": false, "code": "SMS_FAIL", "message": "验证码错误或已过期" }
+```
+
+### 配置项
+
+```yaml
+iam:
+  sms:
+    provider: stub              # stub = 日志打印；扩展：aliyun / tencent
+    code-ttl-seconds: 300       # 验证码有效期
+    code-length: 6              # 位数
+    aliyun-access-key:          # provider=aliyun 时必填
+    aliyun-secret:
+    aliyun-sign-name:
+    aliyun-template-code:
+```
+
+### 演示触发路径
+
+1. 启动 dev
+2. `POST /api/auth/sms/send` body `{"phone":"13800000001"}`
+3. 看 `logs/auth-server.log` 找 `[SMS-STUB]` 行，拿 6 位 code
+4. `POST /api/auth/sms/login` body `{"phone":"13800000001","code":"..."}`
+5. 拿到 accessToken，可继续调 `/api/auth/me`
+
+### 已知限制 / 扩展点
+
+- sender 是 stub，生产必须接真实 SMS SDK（阿里云 / 腾讯云）。**扩展**：在 `SmsCodeService.send()` 加 switch
+- 找不到手机号自动 provision（`username=sms_<phone>`，`password=SMS_DISABLED`）。要封闭用户库时关掉
+- 无频控：同一手机号可无限调 send。**扩展**：Redis 加 `sms:cooling:{phone}` 60 秒冷却
+- 验证码验证后立即消费（`consumeSmsCode`），不可重放
+
+---
+
+## 9. Magic Link（邮箱登录链接）
+
+发一次性 token 到邮箱，点链接换 JWT。Token 存 Redis，TTL 15 分钟。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/auth/magic/send` | 公开 | 按邮箱找用户，生成 token 存 Redis（stub 邮件打日志） |
+| GET  | `/api/auth/magic/verify` | 公开 | token 换 JWT，立即消费 |
+
+### 请求示例
+
+```bash
+# 1. 发送 magic link
+curl -X POST http://localhost:8080/iam/api/auth/magic/send \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@iam.local"}'
+# → 服务端日志：[MAGIC-LINK-STUB] to admin@iam.local: http://localhost:5173/magic-callback?token=abc123 (ttl=15min)
+
+# 2. 从日志拿 token，验证
+curl http://localhost:8080/iam/api/auth/magic/verify?token=<token>
+```
+
+### 响应示例
+
+send：
+
+```json
+{ "success": true, "code": "OK", "message": "登录链接已发送", "data": null }
+```
+
+verify 成功：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "accessToken": "...",
+    "tokenType": "Bearer",
+    "expiresIn": 1800,
+    "mfaRequired": false
+  }
+}
+```
+
+失败：
+
+```json
+{ "success": false, "code": "USER_NOT_FOUND", "message": "邮箱未注册" }
+{ "success": false, "code": "INVALID_MAGIC", "message": "链接无效或已使用" }
+```
+
+### 配置项
+
+```yaml
+iam:
+  magic-link:
+    base-url: http://localhost:5173/magic-callback  # 邮件里链接的前端落地页
+    ttl-minutes: 15                                 # token 有效期
+```
+
+### 演示触发路径
+
+1. 启动 dev（DemoSeeder 会建 admin，但 admin 邮箱字段可能为空 — 用 alice 或先 `/admin/api/users` 给 admin 补 email）
+2. `POST /api/auth/magic/send` body `{"email":"<用户邮箱>"}`
+3. 看 `logs/auth-server.log` 找 `[MAGIC-LINK-STUB]` 行，拿链接
+4. 浏览器或 curl 打开链接的 token 参数 → `GET /api/auth/magic/verify?token=...`
+5. 拿到 accessToken
+
+### 已知限制 / 扩展点
+
+- mailer 是 stub，生产必须接 SMTP / SES。**扩展**：在 `MagicLinkService.send()` 加 JavaMail
+- token 单次使用（`consumeMagicToken` 立即删 Redis key）
+- token 走 URL query，可能被 referer / 日志泄漏。**扩展**：改成前端 POST 体里带 token，或 HttpOnly cookie
+- 无 IP 限制 / 频控
+
+---
+
+## 10. LDAP / Active Directory
+
+LDAP bind 认证。成功后 find-or-provision 本地用户（通过 `social_bindings(provider='ldap')` 关联 DN）。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/auth/ldap` | 公开 | 用户名 + 密码 + tenantCode，bind 验证 |
+
+### 请求示例
+
+```bash
+curl -X POST http://localhost:8080/iam/api/auth/ldap \
+  -H "Content-Type: application/json" \
+  -d '{"username":"john","password":"ldappass","tenantCode":"default"}'
+```
+
+### 响应示例
+
+成功：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "accessToken": "...",
+    "tokenType": "Bearer",
+    "expiresIn": 1800,
+    "mfaRequired": false
+  }
+}
+```
+
+失败：
+
+```json
+{ "success": false, "code": "LDAP_DISABLED", "message": "LDAP 未配置" }
+{ "success": false, "code": "BAD_CREDENTIALS", "message": "LDAP 用户名或密码错误" }
+{ "success": false, "code": "LDAP_ERROR", "message": "LDAP 认证失败: connect timeout" }
+```
+
+### 配置项
+
+```yaml
+iam:
+  ldap:
+    url:                  # ldap://host:389 或 ldaps://host:636。空则禁用
+    base:                 # 搜索 base，如 dc=corp,dc=com
+    user-dn-pattern: uid={0},ou=people   # {0} 替换为 username。AD 用 {0}@corp
+    manager-dn:           # 用于 bind 后搜索（可选，匿名搜索时不填）
+    manager-password:
+```
+
+AD 示例：
+```yaml
+iam:
+  ldap:
+    url: ldaps://ad.corp.com:636
+    base: dc=corp,dc=com
+    user-dn-pattern: '{0}@corp.com'   # UPN 风格
+```
+
+OpenLDAP 示例：
+```yaml
+iam:
+  ldap:
+    url: ldap://ldap.corp.com:389
+    base: dc=corp,dc=com
+    user-dn-pattern: uid={0},ou=people
+    manager-dn: cn=admin,dc=corp,dc=com
+    manager-password: secret
+```
+
+### 演示触发路径
+
+dev 模式 `iam.ldap.url` 空，调 `/api/auth/ldap` 直接返 `LDAP_DISABLED`。要演示：
+
+1. docker 起一个 OpenLDAP：`docker run -p 389:389 -e LDAP_ORGANISATION=... -e LDAP_ADMIN_PASSWORD=... osixia/openldap:1.4.0`
+2. 导入几个测试用户（`ldapadd`）
+3. 改 `application-dev.yml` 填 `iam.ldap.*`
+4. 重启 auth-server（启动日志应有 `LDAP context source initialized`）
+5. curl `/api/auth/ldap` 用 LDAP 用户登录
+
+### 已知限制 / 扩展点
+
+- 单 LDAP server 全租户共享。**扩展**：按 `TenantEntity.ldapUrl` 动态构造 `LdapContextSource`（`LdapConfig.reconfigure` 已留口子）
+- `LdapTemplate.authenticate("", "(uid=" + username + ")", password)` — 用户名注入风险。**已用** `(uid=...)` LDAP filter 转义由 Spring LDAP 处理，但严格场景应 `LdapEncoder.nameEncode(username)`
+- 用户首次登录自动 provision（`username=ldap_<uid>`，`password=DISABLED`）
+- 属性解析只取 `mail` + `cn`。**扩展**：取 `department` / `title` 等做多维映射
+
+---
+
+## 11. Kerberos / SPNEGO
+
+AD 域用户的透明 SSO。浏览器带 `Authorization: Negotiate <SPNEGO token>`，服务端解码验 KDC。
+
+> **当前为 stub**：未接 `org.ietf.jgss` + JAAS。返回 401 challenge 或 501 stub。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| (任意) | `<path>/api/auth/kerberos` | Negotiate | filter 拦截，401 challenge / 501 stub |
+
+无独立 controller，由 `KerberosSpnegoFilter` 在 SecurityFilterChain 里拦截以 `/api/auth/kerberos` 结尾的路径。
+
+### 请求示例
+
+```bash
+# 浏览器或 curl 不带 Authorization：
+curl -i http://localhost:8080/iam/api/auth/kerberos
+# → HTTP/1.1 401
+#   WWW-Authenticate: Negotiate realm="EXAMPLE.COM"
+#   {"code":"KERBEROS_CHALLENGE","message":"Negotiate required"}
+
+# 启用后（实际未实现，返 501）：
+curl -i -H "Authorization: Negotiate <SPNEGO token>" \
+     http://localhost:8080/iam/api/auth/kerberos
+# → HTTP/1.1 501
+#   {"code":"KERBEROS_STUB","message":"解码 SPNEGO token 需要 org.ietf.jgss + JAAS 配置"}
+```
+
+### 响应示例
+
+见上。无成功路径（stub）。
+
+### 配置项
+
+```yaml
+iam:
+  kerberos:
+    enabled: false    # 即使 true，解码逻辑未实现，仍 501
+    realm:            # EXAMPLE.COM，仅用于 WWW-Authenticate realm 提示
+```
+
+### 演示触发路径
+
+不可演示（stub）。要真实接入：
+
+1. 配 KDC（AD 域控 / MIT Kerberos）
+2. 生成 keytab，配 JAAS login config（`-Djava.security.auth.login.config=jaas.conf`）
+3. 配 `krb5.conf`（`-Djava.security.krb5.conf=/etc/krb5.conf`）
+4. 在 `KerberosSpnegoFilter.doFilterInternal` 里写 GSSContext 解码 + 验证 + 提取 user principal
+5. 找到本地用户（或 provision）→ 签 JWT
+
+### 已知限制 / 扩展点
+
+- **完全未实现**，只发 challenge。生产前必须接 GSSAPI
+- 浏览器要配 `about:config` → `network.negotiate-auth.trusted-uris = localhost`
+- 跨域 / 反向代理场景需保留 `Authorization` header
+
+---
+
+## 12. WebAuthn / Passkey (FIDO2)
+
+浏览器 `navigator.credentials` 注册 / 验证公钥凭证。无密码登录的未来方案。
+
+> **当前为 stub**：未接 `spring-security-webauthn` 或 `com.webauthn4j`。即使 `enabled=true` 也只返占位 challenge，finish 端点 501。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| POST | `/api/auth/webauthn/register/begin` | Bearer | 返 PublicKeyCredentialCreationOptions（stub） |
+| POST | `/api/auth/webauthn/register/finish` | Bearer | 验证注册响应（501） |
+| POST | `/api/auth/webauthn/auth/begin` | 公开 | 返 PublicKeyCredentialRequestOptions（stub） |
+| POST | `/api/auth/webauthn/auth/finish` | 公开 | 验证断言（501） |
+
+### 请求示例
+
+```bash
+TOK=<登录后的 accessToken>
+
+# 1. 注册开始
+curl -X POST http://localhost:8080/iam/api/auth/webauthn/register/begin \
+  -H "Authorization: Bearer $TOK"
+# → { "data": { "rp": {"id":"localhost","name":"IAM-Platform"}, "user": {"id":"1","name":"admin"}, "challenge": "STUB_CHALLENGE_REPLACE_WITH_REAL_RANDOM" } }
+
+# 2. 注册完成（实际 501）
+curl -X POST http://localhost:8080/iam/api/auth/webauthn/register/finish \
+  -H "Authorization: Bearer $TOK"
+# → HTTP 501 "WebAuthn finish 需接入 WebAuthnManager.verifyRegistrationResponse"
+```
+
+### 响应示例
+
+register/begin（enabled=true 时）：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "data": {
+    "rp": { "id": "localhost", "name": "IAM-Platform" },
+    "user": { "id": "1", "name": "admin" },
+    "challenge": "STUB_CHALLENGE_REPLACE_WITH_REAL_RANDOM"
+  }
+}
+```
+
+未启用时所有端点返 501：
+
+```
+HTTP/1.1 501
+WebAuthn 未启用 — 配置 iam.webauthn.enabled=true 并接入 spring-security-webauthn
+```
+
+### 配置项
+
+```yaml
+iam:
+  webauthn:
+    enabled: false                              # true 也只是返 stub
+    rp-id: localhost                            # WebAuthn RP ID（必须是 origin 的域名）
+    rp-name: IAM-Platform
+    origin: http://localhost:5173               # 前端 origin
+```
+
+### 演示触发路径
+
+不可完整演示。要真实接入：
+
+1. 加依赖 `com.webauthn4j:webauthn4j-core`
+2. 实现 `WebAuthnManager`，`register/begin` 返真实随机 challenge（存 Redis）
+3. `register/finish` 调 `parseRegistrationResponseJSON` + 验证 → 存 `user_credentials` 表（公钥 + counter）
+4. `auth/begin` 返 challenge，`auth/finish` 验签 → 签 JWT
+5. 前端用 `@simplewebauthn/browser` SDK
+
+### 已知限制 / 扩展点
+
+- **完全未实现**，所有 finish 端点 501
+- challenge 是固定字符串 `STUB_CHALLENGE_REPLACE_WITH_REAL_RANDOM`，绝不能用于生产
+- 无凭证表（user_credentials）— 数据模型待加
+- 无设备清单 / 删除凭证端点
+
+---
+
+## 13. SCIM 2.0 (RFC 7643/7644)
+
+跨域用户 provisioning 协议。IdP（Okta / Azure AD）通过 SCIM 自动同步用户到本系统。
+
+> **当前为 stub**：`/scim/v2/Users` 返空列表，无 GET 单个 / POST / PATCH / DELETE。
+
+### 端点
+
+| Method | Path | 鉴权 | 说明 |
+|--------|------|------|------|
+| GET | `/scim/v2/Users` | 公开（应改 Bearer） | ListResponse（stub 空列表） |
+| GET | `/scim/v2/ServiceProviderConfigs` | 公开 | 服务商能力声明 |
+
+### 请求示例
+
+```bash
+curl http://localhost:8080/iam/scim/v2/Users
+
+curl http://localhost:8080/iam/scim/v2/ServiceProviderConfigs
+```
+
+### 响应示例
+
+`/scim/v2/Users`（`scim.enabled=false` 时 501）：
+
+```
+HTTP/1.1 501
+SCIM 未启用 — 配置 iam.scim.enabled=true
+```
+
+`/scim/v2/Users`（`scim.enabled=true` 时）：
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+  "totalResults": 0,
+  "Resources": []
+}
+```
+
+`/scim/v2/ServiceProviderConfigs`（始终返回，patch.supported 跟 `scim.enabled` 走）：
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
+  "patch": { "supported": false },
+  "documentationUri": "https://datatracker.ietf.org/doc/rfc7644/"
+}
+```
+
+### 配置项
+
+```yaml
+iam:
+  scim:
+    enabled: false    # true 仅让 /scim/v2/Users 返空列表，CRUD 仍未实现
+```
+
+### 演示触发路径
+
+1. yml 设 `iam.scim.enabled=true`
+2. 重启
+3. curl `/scim/v2/Users` → 空列表
+4. 真实 IdP 同步需要先实现 POST/PATCH/DELETE（见下）
+
+### 已知限制 / 扩展点
+
+- **CRUD 全未实现**，只有列表占位
+- 端点公开无鉴权 — 必须加 Bearer token 校验（OAuth2 client_credentials）
+- 无 `/scim/v2/Groups` 端点
+- 无 `/scim/v2/Bulk` 批量接口
+- 无 ETag / 分页
+- **扩展**：接入 `scim2-sdk` 或手写 6 个端点（Users GET/POST/PUT/PATCH/DELETE + Groups）
+
+---
+
+## 附录 A：错误码总表
+
+| code | HTTP | 触发场景 | 来源协议 |
+|------|------|---------|---------|
+| `USER_NOT_FOUND` | 401 | 用户名不存在 / 邮箱未注册 / userId 无效 | §1 §9 §10 |
+| `BAD_CREDENTIALS` | 401 | 密码错 / LDAP bind 失败 | §1 §10 |
+| `LOCKED` | 403 | 账号锁定（连续失败达上限） | §1 |
+| `RATE_LIMITED` | 429 | 同 IP 每分钟登录超限 | §1 |
+| `MFA_TOKEN_INVALID` | 401 | mfaToken 过期 / 类型错 | §2 |
+| `MFA_FAIL` | 401 | TOTP 码错 | §2 |
+| `NO_SECRET` | 400 | 未先 setup 就 confirm | §2 |
+| `INVALID_REFRESH` | 400 | refresh token 不存在 | §1 §3 |
+| `EXPIRED_REFRESH` | 400 | refresh 已作废 / 过期 | §1 §3 |
+| `INVALID_CODE` | 400 | OAuth2 授权码无效 / 已用 | §3 |
+| `CLIENT_MISMATCH` | 400 | 授权码 / refresh 与 client 不匹配 | §3 |
+| `REDIRECT_MISMATCH` | 400 | token 时的 redirect_uri 与 authorize 时不一致 | §3 |
+| `PKCE_REQUIRED` | 400 | 授权码带 challenge 但 token 没带 verifier | §3 |
+| `PKCE_FAILED` | 400 | code_verifier 校验失败 | §3 |
+| `CLIENT_NOT_FOUND` | 400 | client_id 不存在 | §3 |
+| `BAD_CLIENT_SECRET` | 401 | client_secret 错 | §3 |
+| `GRANT_NOT_ALLOWED` | 400 | 客户端未授权该 grant_type | §3 |
+| `REDIRECT_NOT_ALLOWED` | 400 | redirect_uri 不在白名单 | §3 |
+| `UNSUPPORTED_GRANT` | 400 | grant_type 不在 4 种支持内 | §3 |
+| `CAS_NOT_CONFIGURED` | 400 | `iam.cas.server-url` 空 | §6 |
+| `CAS_FAIL` | 400 | ticket 无效 / 未取到 user | §6 |
+| `CAS_ERROR` | 500 | CAS server 不可达 | §6 |
+| `SOCIAL_NOT_CONFIGURED` | 400 | provider 的 app-id 空 | §7 |
+| `SOCIAL_NOT_IMPLEMENTED` | 501 | alipay（待补 RSA2） | §7 |
+| `SOCIAL_FAIL` | 400 | token 交换失败 / 无 openid | §7 |
+| `UNKNOWN_PROVIDER` | 400 | provider 不在 5 个内 | §7 |
+| `BAD_PHONE` | 400 | 手机号 < 7 位 | §8 |
+| `SMS_FAIL` | 400 | 验证码错 / 过期 | §8 |
+| `INVALID_MAGIC` | 400 | magic token 无效 / 已用 | §9 |
+| `LDAP_DISABLED` | 400 | `iam.ldap.url` 空 | §10 |
+| `LDAP_ERROR` | 500 | LDAP 连接异常 | §10 |
+| `DUP_USERNAME` | 409 | 注册时用户名已存在 | §1（/api/users/register） |
+| `TENANT_NOT_FOUND` | 400 | tenantCode 不存在 | §1 |
+| `KERBEROS_CHALLENGE` | 401 | 未带 Negotiate header | §11 |
+| `KERBEROS_DISABLED` | 501 | `iam.kerberos.enabled=false` | §11 |
+| `KERBEROS_STUB` | 501 | 解码逻辑未实现 | §11 |
+| `UNAUTHORIZED` | 401 | 受保护端点未登录 | 通用 |
+
+---
+
+## 附录 B：配置项总表（按 yml 顺序）
+
+```yaml
+iam:
+  jwt:        { secret, issuer, access-ttl-minutes, refresh-ttl-days }   # §1 §4
+  password:   { bcrypt-strength, max-fail-count, lock-minutes }          # §1
+  mfa:        { totp-issuer, totp-digits, totp-period }                  # §2
+  ratelimit:  { login-per-minute }                                       # §1
+  tenant:     { default: default }
+  audit:      { tamper-proof: true }
+  cors:       { allowed-origins }                                        # 全协议
+  saml:       { idp: {metadata-url, entity-id, sso-url}, sp: {entity-id, acs-base, frontend-redirect} }  # §5
+  ldap:       { url, base, user-dn-pattern, manager-dn, manager-password }                                                # §10
+  sms:        { provider, code-ttl-seconds, code-length, aliyun-* }      # §8
+  magic-link: { base-url, ttl-minutes }                                  # §9
+  social:     { wechat, alipay, qq, dingtalk, wecom }                    # §7
+  cas:        { server-url, service-url }                                # §6
+  webauthn:   { enabled, rp-id, rp-name, origin }                        # §12
+  scim:       { enabled }                                                # §13
+  kerberos:   { enabled, realm }                                         # §11
+```
+
+环境变量覆盖（dev profile 里用 `${ENV:default}` 占位）：
+
+| ENV | 默认 | 用途 |
+|-----|------|------|
+| `IAM_JWT_SECRET` | `CHANGE_ME_...` | §1 HS256 密钥 |
+| `DB_HOST` / `DB_USER` / `DB_PASS` | `localhost` / `iam` / `iam123` | MySQL 连接 |
+| `REDIS_HOST` / `REDIS_PASS` | `localhost` / 空 | Redis 连接 |
+| `OAUTH_GOOGLE_ID` / `OAUTH_GOOGLE_SECRET` | 空 | Spring Security OAuth2 client（Google，未在协议手册里） |
+
+---
+
+## 附录 C：协议成熟度矩阵
+
+| # | 协议 | 代码状态 | 可演示 | 文档 |
+|---|------|---------|--------|------|
+| 1 | 密码登录 + JWT | ✅ 完整 | ✅ | §1 |
+| 2 | MFA / TOTP | ✅ 完整 | ✅（需 Authenticator） | §2 |
+| 3 | OAuth2 授权码 + PKCE | ✅ 完整 | ✅ | §3 |
+| 4 | OIDC | ✅ 完整（HS256） | ✅ | §4 |
+| 5 | SAML 2.0 | ✅ 完整 | ⚠️ 需 IdP | §5 |
+| 6 | CAS 2.0 | ✅ 完整 | ⚠️ 需 CAS server | §6 |
+| 7 | 社交登录 | ⚠️ 4/5 实现（alipay 未实现） | ⚠️ 需 provider appid | §7 |
+| 8 | SMS 验证码 | ⚠️ sender stub | ✅（看日志拿码） | §8 |
+| 9 | Magic Link | ⚠️ mailer stub | ✅（看日志拿链接） | §9 |
+| 10 | LDAP | ✅ 完整 | ⚠️ 需 LDAP server | §10 |
+| 11 | Kerberos / SPNEGO | ❌ stub | ❌ | §11 |
+| 12 | WebAuthn / Passkey | ❌ stub | ❌ | §12 |
+| 13 | SCIM 2.0 | ❌ stub（仅 list 占位） | ⚠️ 仅空列表 | §13 |
+
+**生产前必须补**：§11 Kerberos、§12 WebAuthn、§13 SCIM CRUD、§7 alipay RSA2、§8 §9 真实 sender。
