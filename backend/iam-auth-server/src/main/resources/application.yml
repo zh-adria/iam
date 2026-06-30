@@ -1,0 +1,129 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /iam
+
+spring:
+  application:
+    name: iam-auth-server
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/iam?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USER:iam}
+    password: ${DB_PASS:iam123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate.format_sql: true
+  liquibase:
+    change-log: classpath:db/changelog/master.xml
+    enabled: true
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: 6379
+    password: ${REDIS_PASS:}
+    timeout: 3000ms
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${OAUTH_GOOGLE_ID:}
+            client-secret: ${OAUTH_GOOGLE_SECRET:}
+            scope: openid, profile, email
+
+iam:
+  jwt:
+    # ponytail: HS256 for demo single-instance. Switch to RS256 + key pair when multiple resource servers verify tokens.
+    secret: ${IAM_JWT_SECRET:CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256}
+    issuer: iam-platform
+    access-ttl-minutes: 30
+    refresh-ttl-days: 7
+  password:
+    bcrypt-strength: 10
+    max-fail-count: 5
+    lock-minutes: 30
+  mfa:
+    totp-issuer: IAM-Platform
+    totp-digits: 6
+    totp-period: 30
+  ratelimit:
+    login-per-minute: 10
+  tenant:
+    default: default
+  audit:
+    tamper-proof: true
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+  saml:
+    idp:
+      # ponytail: leave empty to disable SAML SSO. Fill in for real IdP (Azure AD / Shibboleth / Keycloak).
+      metadata-url:
+      entity-id:
+      sso-url:
+    sp:
+      entity-id: urn:iam:sp
+      acs-base: http://localhost:8080/iam/login/saml2/sso
+      frontend-redirect: http://localhost:5173/dashboard
+  ldap:
+    # ponytail: empty url disables LDAP. For AD use url=ldaps://ad.corp:636 user-dn-pattern={0}@corp
+    url:
+    base:
+    user-dn-pattern: uid={0},ou=people
+    manager-dn:
+    manager-password:
+  sms:
+    # ponytail: stub sender — logs code to console. Wire Aliyun/Tencent SMS SDK here for prod.
+    provider: stub
+    code-ttl-seconds: 300
+    code-length: 6
+    aliyun-access-key:
+    aliyun-secret:
+    aliyun-sign-name:
+    aliyun-template-code:
+  magic-link:
+    # ponytail: email sender stub — logs link to console. Wire SMTP/SES for prod.
+    base-url: http://localhost:5173/magic-callback
+    ttl-minutes: 15
+  social:
+    # ponytail: fill appId/appSecret per provider to enable. Callback URL = /iam/api/auth/social/{provider}/callback
+    wechat:
+      app-id:
+      app-secret:
+    alipay:
+      app-id:
+      app-private-key:
+    qq:
+      app-id:
+      app-key:
+    dingtalk:
+      app-id:
+      app-secret:
+    wecom:
+      corp-id:
+      agent-id:
+      corp-secret:
+  cas:
+    # ponytail: CAS server base URL. SP-style: validate service ticket via /cas/serviceValidate
+    server-url:
+    service-url: http://localhost:8080/iam/api/auth/cas/callback
+  webauthn:
+    # ponytail: stub — Spring Security WebAuthn not in 2.7. Returns 501 until implemented.
+    enabled: false
+    rp-id: localhost
+    rp-name: IAM-Platform
+    origin: http://localhost:5173
+  scim:
+    # ponytail: stub — /scim/v2/Users returns empty list. Implement per RFC 7643 when federating with IdP.
+    enabled: false
+  kerberos:
+    # ponytail: stub — emits WWW-Authenticate: Negotiate. Wire JAAS + krb5.conf + org.ietf.jgss to enable.
+    enabled: false
+    realm:
+
+logging:
+  level:
+    com.iam: INFO
+    org.springframework.security: INFO

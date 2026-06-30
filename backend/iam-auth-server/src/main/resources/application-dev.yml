@@ -1,0 +1,110 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /iam
+
+spring:
+  datasource:
+    # ponytail: H2 file + AUTO_SERVER=TRUE so iam-auth-server and iam-admin
+    # (two JVMs) share one on-disk DB. Data persists across restarts in
+    # ~/iam-dev/iam.*. Delete the file to reset. Switch to mysql for prod.
+    url: jdbc:h2:file:${user.home}/iam-dev/iam;AUTO_SERVER=TRUE;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+  liquibase:
+    change-log: classpath:db/changelog/master.xml
+    enabled: true
+    contexts: dev
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: 6379
+    password: ${REDIS_PASS:}
+    timeout: 3000ms
+
+# ponytail: Windows Redis INFO returns the executable path with backslashes
+# (C:\Users\...). Spring's Properties.load treats \U as a bad escape and throws
+# "Malformed \uxxxx encoding" — fails the actuator redis health check, which
+# makes /actuator/health return 503 and dev.ps1 think auth-server never came up.
+# The app itself uses Redis fine; only the indicator is broken. Disable in dev.
+# LDAP/SAML/CAS etc. are also stubbed in dev — disable those indicators too so
+# the aggregated health endpoint returns UP.
+management:
+  health:
+    redis:
+      enabled: false
+    ldap:
+      enabled: false
+
+iam:
+  jwt:
+    secret: ${IAM_JWT_SECRET:CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256}
+    issuer: iam-platform
+    access-ttl-minutes: 30
+    refresh-ttl-days: 7
+  password:
+    bcrypt-strength: 10
+    max-fail-count: 5
+    lock-minutes: 30
+  mfa:
+    totp-issuer: IAM-Platform
+    totp-digits: 6
+    totp-period: 30
+  ratelimit:
+    login-per-minute: 10
+  tenant:
+    default: default
+  audit:
+    tamper-proof: true
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+  saml:
+    idp:
+      metadata-url:
+      entity-id:
+      sso-url:
+    sp:
+      entity-id: urn:iam:sp
+      acs-base: http://localhost:8080/iam/login/saml2/sso
+      frontend-redirect: http://localhost:5173/dashboard
+  ldap:
+    url:
+    base:
+    user-dn-pattern: uid={0},ou=people
+    manager-dn:
+    manager-password:
+  sms:
+    provider: stub
+    code-ttl-seconds: 300
+    code-length: 6
+  magic-link:
+    base-url: http://localhost:5173/magic-callback
+    ttl-minutes: 15
+  social:
+    wechat: { app-id: , app-secret: }
+    alipay: { app-id: , app-private-key: }
+    qq: { app-id: , app-key: }
+    dingtalk: { app-id: , app-secret: }
+    wecom: { corp-id: , agent-id: , corp-secret: }
+  cas:
+    server-url:
+    service-url: http://localhost:8080/iam/api/auth/cas/callback
+  webauthn:
+    enabled: false
+    rp-id: localhost
+    rp-name: IAM-Platform
+    origin: http://localhost:5173
+  scim:
+    enabled: false
+  kerberos:
+    enabled: false
+    realm:
+
+logging:
+  level:
+    com.iam: INFO
+    org.springframework: INFO
