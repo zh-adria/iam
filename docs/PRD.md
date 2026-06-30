@@ -1,0 +1,106 @@
+# IAM Platform — PRD（产品需求手册）
+
+> 版本：1.0.0 · 更新：2026-06-30 · 状态：MVP 已交付
+
+## 1. 产品定位
+
+统一身份与访问管理平台（IAM），面向中小型企业及多租户 SaaS 场景，提供：
+
+- **运行态（iam-auth-server）**：终端用户登录、认证、令牌签发、单点登录。
+- **管理态（iam-admin）**：管理员配置租户、用户、角色、权限、客户端、审计、运行时参数。
+
+两个服务共享同一份 MySQL + Redis + JWT 密钥，独立部署、独立伸缩。
+
+## 2. 目标用户与角色
+
+| 角色 | 使用入口 | 主要诉求 |
+|------|---------|---------|
+| 终端用户 | 前端登录页 / 第三方应用 | 多方式登录（账密、SMS、Magic Link、社交、SAML、CAS、LDAP、MFA） |
+| 应用接入方 | OAuth2/OIDC 端点 | 拿到 access_token / id_token 验证用户身份 |
+| 平台管理员 | 前端管理控制台 | CRUD 用户/角色/权限/租户/客户端，查看审计链 |
+| IdP 管理员 | SAML metadata / SCIM 端点 | 与企业 IdP 联邦 |
+
+## 3. 功能清单
+
+### 3.1 运行态功能（iam-auth-server，端口 8080）
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 账密登录 + 刷新 | `POST /iam/api/auth/login`、`/refresh` | BCrypt 密码、失败 5 次锁定 30 分钟 |
+| MFA（TOTP） | `POST /iam/api/auth/mfa/verify` | RFC 6238 30s/6位，与账密二次验证 |
+| LDAP 登录 | `POST /iam/api/auth/ldap` | 多租户独立 LDAP URL/Base |
+| SMS 验证码 | `POST /iam/api/auth/sms/send`、`/login` | 6 位、5 分钟有效，stub sender 日志输出 |
+| Magic Link | `POST /iam/api/auth/magic/send`、`/verify` | 邮件链接、15 分钟有效，Redis 缓存 |
+| 社交登录 | `GET /iam/api/auth/social/{provider}/authorize`、`/callback` | 微信、支付宝、QQ、钉钉、企业微信 |
+| CAS 2.0 | `GET /iam/api/auth/cas/login`、`/callback` | serviceValidate 协议 |
+| OAuth2 授权码 + PKCE | `GET /iam/oauth/authorize`、`POST /iam/oauth/token` | S256 code_challenge |
+| OAuth2 client_credentials | `POST /iam/oauth/token` grant_type=client_credentials | 机机接入 |
+| OIDC ID Token | `POST /iam/oauth/token` scope=openid | HS256 签名，含 nonce |
+| Token introspect / revoke | `POST /iam/oauth/introspect`、`/revoke` | RFC 7662 / RFC 7009 |
+| Discovery + JWKS | `GET /iam/oauth/.well-known/openid-configuration`、`/jwks` | 标准 OIDC 发现 |
+| UserInfo | `GET /iam/oauth/userinfo` | OIDC userinfo endpoint |
+| SAML 2.0 SP | `GET /iam/saml/metadata`、`/login/saml2/sso` | metadata URL 自动加载 |
+| WebAuthn（stub） | `POST /iam/api/auth/webauthn/{begin,finish}` | 501 未启用 |
+| Kerberos SPNEGO（stub） | `GET /iam/api/auth/kerberos` | WWW-Authenticate: Negotiate |
+| SCIM 2.0（stub） | `GET /iam/scim/v2/Users` | RFC 7643/7644 待实现 |
+| 用户自助 | `POST /iam/api/users/register`、`GET /me` | 注册、查个人信息 |
+
+### 3.2 管理态功能（iam-admin，端口 8081）
+
+所有接口前缀 `/iam/admin/api`，需要 `ROLE_ADMIN`。
+
+| 资源 | 操作 |
+|------|------|
+| 用户 | 列表（分页+租户过滤）/ 新建 / 重置密码 / 启停 / 解锁 / 删除 / 角色分配 |
+| 角色 | 列表 / 新建 / 删除 |
+| 权限 | 列表 / 新建 / 删除 / 授权给角色 / 撤销 |
+| OAuth2 客户端 | 列表 / upsert / 删除 |
+| 租户 | 列表 / upsert / 删除（SHARED / SCHEMA_PER_TENANT） |
+| 审计日志 | 列表（含哈希链校验） |
+| 系统配置 | 读取 / 更新运行时参数 |
+
+### 3.3 前端管理控制台
+
+7 个侧边栏面板：Users / Roles / Perms / Clients / Tenants / Audit / Config。
+登录页 6 个 Tab：Password / SMS / Magic Link / Social / SAML / CAS。
+
+## 4. 多租户模型
+
+- **SHARED**：所有租户共享 Schema，行级 `tenant` 列隔离（默认）。
+- **SCHEMA_PER_TENANT**：每租户独立 Schema（路由已留接口，DDL 自动化待补）。
+- 租户独立 LDAP：`TenantEntity.ldapUrl` / `ldapBase` 覆盖全局配置。
+
+## 5. 安全与合规
+
+- 密码：BCrypt（strength=10），失败 5 次锁定 30 分钟。
+- 令牌：JWT HS256，access 30 分钟、refresh 7 天。
+- 审计：所有登录/授权/管理操作落 `audit_log`，记录 principal / action / ip / time / hash_chain_prev，支持篡改检测。
+- 权限模型：RBAC + 资源/动作 + SpEL 表达式（数据级权限）。
+- 限流：登录 10 次/分钟/IP（Redis 计数器）。
+
+## 6. 非功能性需求
+
+| 维度 | 目标 |
+|------|------|
+| 可用性 | 单实例足够 MVP；无状态 JWT 可水平扩展 |
+| 性能 | 登录 P99 < 200ms（不含 LDAP/外部 IdP） |
+| 兼容性 | MySQL 8.0、Redis 7、JDK 17、Spring Boot 2.7.18 |
+| 可观测 | actuator/health、日志 INFO 级 |
+| 国际化 | 默认中文 UI；后端错误码中性 |
+
+## 7. 不在本期范围（YAGNI）
+
+- WebAuthn / Kerberos / SCIM 完整实现（仅 stub）
+- SCHEMA_PER_TENANT 的自动化 DDL 编排
+- RS256 + JWKS 公钥轮换（HS256 单实例够用）
+- 邮件/SMS 真实发送通道（stub 日志输出，留接入点）
+- 多因素 FIDO2、无密码登录
+- 用户自助修改个人信息（仅 /me 查看）
+
+## 8. 验收标准
+
+- 11/11 单元+集成测试通过（AuthFlowTest、LdapAuthTest、OAuth2FlowTest）。
+- `./scripts/build.sh` 一键产出两个 fat jar + 前端 dist。
+- `./scripts/dev.sh` 一键拉起完整开发栈。
+- `./scripts/start.sh` 一键 docker-compose 部署。
+- 演示账号可登录前端，admin 进入管理控制台 CRUD 各资源。
