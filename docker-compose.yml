@@ -1,0 +1,70 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: iam-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: iam
+      MYSQL_USER: iam
+      MYSQL_PASSWORD: iam123
+    ports: ["3306:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/demo-data.sql:/docker-entrypoint-initdb.d/01-demo.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot123"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: iam-redis
+    ports: ["6379:6379"]
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+  iam-auth-server:
+    build:
+      context: ./backend
+      args:
+        SERVICE: iam-auth-server
+    container_name: iam-auth-server
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_USER: iam
+      DB_PASS: iam123
+      REDIS_HOST: redis
+      IAM_JWT_SECRET: CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256
+    ports: ["8080:8080"]
+
+  iam-admin:
+    build:
+      context: ./backend
+      args:
+        SERVICE: iam-admin
+    container_name: iam-admin
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_USER: iam
+      DB_PASS: iam123
+      REDIS_HOST: redis
+      IAM_JWT_SECRET: CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256
+    ports: ["8081:8081"]
+
+volumes:
+  mysql-data:
+  redis-data:

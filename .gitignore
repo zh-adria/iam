@@ -1,0 +1,26 @@
+# Build output
+backend/*/target/
+target/
+frontend/dist/
+frontend/node_modules/
+
+# Dev runtime artifacts
+logs/
+logs_dev_run.txt
+*.log
+*.err.log
+
+# Auto-provisioned portable Redis (downloaded by dev.ps1 on first run)
+scripts/redis/
+
+# H2 dev database (~/iam-dev/iam.*)
+iam-dev/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
