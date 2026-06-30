@@ -1,0 +1,292 @@
+package com.iam.app.service;
+
+import com.iam.app.dto.ApiResult;
+import com.iam.domain.AuthException;
+import com.iam.infrastructure.entity.*;
+import com.iam.infrastructure.repository.*;
+import com.iam.infrastructure.security.PasswordHasher;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Admin-side service: CRUD for users/roles/permissions/tenants/clients + runtime config.
+ * Lives in iam-common; wired only into the iam-admin service via AdminController.
+ */
+@Service
+@RequiredArgsConstructor
+public class AdminAppService {
+
+    private final UserRepository userRepo;
+    private final RoleRepository roleRepo;
+    private final PermissionRepository permRepo;
+    private final UserRoleRepository userRoleRepo;
+    private final RolePermissionRepository rolePermRepo;
+    private final TenantRepository tenantRepo;
+    private final AuditLogRepository auditRepo;
+    private final OAuth2ClientRepository clientRepo;
+    private final PasswordHasher hasher;
+
+    // ---------- users ----------
+    public Map<String, Object> listUsers(int page, int size, String tenant) {
+        List<UserEntity> all = userRepo.findAll();
+        if (tenant != null && !tenant.isEmpty()) {
+            all = all.stream().filter(u -> tenant.equals(u.getTenantCode())).collect(Collectors.toList());
+        }
+        int total = all.size();
+        List<Map<String, Object>> rows = all.stream()
+                .skip((long) (page - 1) * size).limit(size)
+                .map(this::userRow)
+                .collect(Collectors.toList());
+        Map<String, Object> r = new HashMap<>();
+        r.put("total", total);
+        r.put("page", page);
+        r.put("size", size);
+        r.put("rows", rows);
+        return r;
+    }
+
+    @Transactional
+    public Map<String, Object> createUser(String username, String password, String email, String phone,
+                                          String tenant, int status) {
+        if (userRepo.existsByUsername(username)) throw new AuthException("DUP_USERNAME", "用户名已存在");
+        UserEntity u = userRepo.save(UserEntity.builder()
+                .username(username).passwordHash(hasher.encode(password))
+                .email(email).phone(phone).tenantCode(tenant == null ? "default" : tenant)
+                .status(status).mfaEnabled(false).failCount(0).build());
+        return userRow(u);
+    }
+
+    @Transactional
+    public void resetPassword(Long userId, String newPwd) {
+        UserEntity u = userRepo.findById(userId).orElseThrow(() -> new AuthException("NOT_FOUND", "用户不存在"));
+        u.setPasswordHash(hasher.encode(newPwd));
+        userRepo.save(u);
+    }
+
+    @Transactional
+    public void setUserStatus(Long userId, int status) {
+        UserEntity u = userRepo.findById(userId).orElseThrow(() -> new AuthException("NOT_FOUND", "用户不存在"));
+        u.setStatus(status);
+        userRepo.save(u);
+    }
+
+    @Transactional
+    public void unlockUser(Long userId) {
+        UserEntity u = userRepo.findById(userId).orElseThrow(() -> new AuthException("NOT_FOUND", "用户不存在"));
+        u.setFailCount(0);
+        u.setLockedUntil(null);
+        userRepo.save(u);
+    }
+
+    @Transactional
+    public void deleteUser(Long userId) {
+        userRepo.deleteById(userId);
+    }
+
+    private Map<String, Object> userRow(UserEntity u) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", u.getId());
+        m.put("username", u.getUsername());
+        m.put("email", UserAppService.maskEmail(u.getEmail()));
+        m.put("phone", UserAppService.maskPhone(u.getPhone()));
+        m.put("tenant", u.getTenantCode());
+        m.put("status", u.getStatus());
+        m.put("mfaEnabled", u.getMfaEnabled());
+        m.put("roles", userRoleRepo.findByUserId(u.getId()).stream()
+                .map(UserRoleEntity::getRoleCode).collect(Collectors.toList()));
+        return m;
+    }
+
+    // ---------- roles ----------
+    public List<Map<String, Object>> listRoles(String tenant) {
+        return roleRepo.findAll().stream()
+                .filter(r -> tenant == null || tenant.isEmpty() || tenant.equals(r.getTenantCode()))
+                .map(r -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("code", r.getCode());
+                    m.put("name", r.getName());
+                    m.put("tenant", r.getTenantCode());
+                    return m;
+                }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void createRole(String code, String name, String tenant) {
+        if (roleRepo.findByCode(code).isPresent()) throw new AuthException("DUP_ROLE", "角色已存在");
+        roleRepo.save(RoleEntity.builder().code(code).name(name).tenantCode(tenant == null ? "default" : tenant).build());
+    }
+
+    @Transactional
+    public void deleteRole(String code) {
+        roleRepo.findByCode(code).ifPresent(roleRepo::delete);
+    }
+
+    @Transactional
+    public void assignRole(Long userId, String roleCode) {
+        if (!userRepo.existsById(userId)) throw new AuthException("NOT_FOUND", "用户不存在");
+        if (!roleRepo.findByCode(roleCode).isPresent()) throw new AuthException("ROLE_NOT_FOUND", "角色不存在");
+        userRoleRepo.save(UserRoleEntity.builder().userId(userId).roleCode(roleCode).build());
+    }
+
+    @Transactional
+    public void revokeRole(Long userId, String roleCode) {
+        userRoleRepo.findByUserId(userId).stream()
+                .filter(ur -> ur.getRoleCode().equals(roleCode))
+                .forEach(userRoleRepo::delete);
+    }
+
+    // ---------- permissions ----------
+    public List<Map<String, Object>> listPermissions() {
+        return permRepo.findAll().stream().map(p -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("code", p.getCode());
+            m.put("type", p.getType());
+            m.put("name", p.getName());
+            m.put("resource", p.getResource());
+            m.put("action", p.getAction());
+            m.put("spel", p.getSpelExpression());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void createPermission(String code, String type, String name, String resource, String action, String spel) {
+        permRepo.save(PermissionEntity.builder()
+                .code(code).type(type).name(name).resource(resource).action(action).spelExpression(spel).build());
+    }
+
+    @Transactional
+    public void deletePermission(String code) {
+        permRepo.findByCode(code).ifPresent(permRepo::delete);
+    }
+
+    @Transactional
+    public void grantPermission(String roleCode, String permCode) {
+        rolePermRepo.save(RolePermissionEntity.builder().roleCode(roleCode).permCode(permCode).build());
+    }
+
+    @Transactional
+    public void revokePermission(String roleCode, String permCode) {
+        rolePermRepo.findByRoleCode(roleCode).stream()
+                .filter(rp -> rp.getPermCode().equals(permCode))
+                .forEach(rolePermRepo::delete);
+    }
+
+    // ---------- tenants ----------
+    public List<Map<String, Object>> listTenants() {
+        return tenantRepo.findAll().stream().map(t -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", t.getId());
+            m.put("code", t.getCode());
+            m.put("name", t.getName());
+            m.put("isolationMode", t.getIsolationMode());
+            m.put("schemaName", t.getSchemaName());
+            m.put("ldapUrl", t.getLdapUrl());
+            m.put("ldapBase", t.getLdapBase());
+            m.put("enabled", t.getEnabled());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void upsertTenant(String code, String name, String mode, String ldapUrl, String ldapBase, Boolean enabled) {
+        TenantEntity t = tenantRepo.findByCode(code).orElseGet(() ->
+                TenantEntity.builder().code(code).name(name == null ? code : name)
+                        .isolationMode(mode == null ? "SHARED" : mode).build());
+        if (name != null) t.setName(name);
+        if (mode != null) t.setIsolationMode(mode);
+        if (ldapUrl != null) t.setLdapUrl(ldapUrl);
+        if (ldapBase != null) t.setLdapBase(ldapBase);
+        if (enabled != null) t.setEnabled(enabled);
+        tenantRepo.save(t);
+    }
+
+    @Transactional
+    public void deleteTenant(String code) {
+        tenantRepo.findByCode(code).ifPresent(tenantRepo::delete);
+    }
+
+    // ---------- oauth2 clients ----------
+    public List<Map<String, Object>> listClients() {
+        return clientRepo.findAll().stream().map(c -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("clientId", c.getClientId());
+            m.put("grantTypes", c.getGrantTypes());
+            m.put("redirectUris", c.getRedirectUris());
+            m.put("scopes", c.getScopes());
+            m.put("createdAt", c.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void upsertClient(String clientId, String clientSecret, String grantTypes,
+                             String redirectUris, String scopes) {
+        OAuth2ClientEntity c = clientRepo.findById(clientId).orElseGet(() ->
+                OAuth2ClientEntity.builder().clientId(clientId).build());
+        if (clientSecret != null && !clientSecret.isEmpty()) c.setClientSecretHash(hasher.encode(clientSecret));
+        if (grantTypes != null) c.setGrantTypes(grantTypes);
+        if (redirectUris != null) c.setRedirectUris(redirectUris);
+        if (scopes != null) c.setScopes(scopes);
+        clientRepo.save(c);
+    }
+
+    @Transactional
+    public void deleteClient(String clientId) {
+        clientRepo.deleteById(clientId);
+    }
+
+    // ---------- audit ----------
+    public Map<String, Object> listAudit(int page, int size, Long userId) {
+        List<AuditLogEntity> all = userId != null
+                ? auditRepo.findByUserIdOrderByOccurredAtDesc(userId)
+                : auditRepo.findAll();
+        List<AuditLogEntity> sorted = all.stream()
+                .sorted((a, b) -> b.getOccurredAt().compareTo(a.getOccurredAt()))
+                .collect(Collectors.toList());
+        int total = sorted.size();
+        List<Map<String, Object>> rows = sorted.stream()
+                .skip((long) (page - 1) * size).limit(size)
+                .map(this::auditRow)
+                .collect(Collectors.toList());
+        Map<String, Object> r = new HashMap<>();
+        r.put("total", total);
+        r.put("page", page);
+        r.put("size", size);
+        r.put("rows", rows);
+        return r;
+    }
+
+    private Map<String, Object> auditRow(AuditLogEntity a) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", a.getId());
+        m.put("userId", a.getUserId());
+        m.put("tenant", a.getTenantCode());
+        m.put("action", a.getAction());
+        m.put("result", a.getResult());
+        m.put("principal", a.getPrincipal());
+        m.put("ip", a.getIp());
+        m.put("detail", a.getDetail());
+        m.put("occurredAt", a.getOccurredAt());
+        m.put("prevHash", a.getHashChainPrev());
+        return m;
+    }
+
+    // ---------- runtime config (LDAP/SAML/Social/MFA) ----------
+    // ponytail: runtime config persisted in iam_tenant + a small config table would be ideal;
+    // for now we expose the static application.yml values via a read-only view, and tenant-level
+    // LDAP config is editable via the tenant CRUD above. System-wide SAML/Social/WebAuthn switches
+    // require a restart after editing application.yml — call out in admin UI.
+    public Map<String, Object> systemConfig() {
+        Map<String, Object> m = new HashMap<>();
+        m.put("note", "系统级 SAML/OAuth2-IdP/WebAuthn 配置在 application.yml，改后需重启；租户级 LDAP 在租户管理中配置");
+        return m;
+    }
+}
