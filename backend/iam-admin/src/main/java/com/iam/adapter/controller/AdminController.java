@@ -1,0 +1,178 @@
+package com.iam.adapter.controller;
+
+import com.iam.app.dto.ApiResult;
+import com.iam.app.service.AdminAppService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * Admin Console API — all management CRUD under /admin/api.
+ * All endpoints require ROLE_ADMIN.
+ * ponytail: one controller for all admin CRUD — split per-resource when this exceeds ~400 lines.
+ */
+@RestController
+@RequestMapping("/admin/api")
+@PreAuthorize("hasRole('ADMIN')")
+@RequiredArgsConstructor
+public class AdminController {
+
+    private final AdminAppService admin;
+
+    // ---------- users ----------
+    @GetMapping("/users")
+    public ApiResult<Map<String, Object>> listUsers(@RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "20") int size,
+                                                     @RequestParam(required = false) String tenant) {
+        return ApiResult.ok(admin.listUsers(page, size, tenant));
+    }
+
+    @PostMapping("/users")
+    public ApiResult<Map<String, Object>> createUser(@RequestBody Map<String, Object> b) {
+        return ApiResult.ok(admin.createUser(
+                (String) b.get("username"), (String) b.get("password"),
+                (String) b.get("email"), (String) b.get("phone"),
+                (String) b.get("tenantCode"),
+                b.get("status") == null ? 1 : ((Number) b.get("status")).intValue()));
+    }
+
+    @PostMapping("/users/{id}/reset-password")
+    public ApiResult<Void> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> b) {
+        admin.resetPassword(id, b.get("password"));
+        return ApiResult.ok(null, "密码已重置");
+    }
+
+    @PostMapping("/users/{id}/status")
+    public ApiResult<Void> setStatus(@PathVariable Long id, @RequestBody Map<String, Object> b) {
+        admin.setUserStatus(id, ((Number) b.get("status")).intValue());
+        return ApiResult.ok(null, "状态已更新");
+    }
+
+    @PostMapping("/users/{id}/unlock")
+    public ApiResult<Void> unlock(@PathVariable Long id) {
+        admin.unlockUser(id);
+        return ApiResult.ok(null, "已解锁");
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ApiResult<Void> deleteUser(@PathVariable Long id) {
+        admin.deleteUser(id);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    @PostMapping("/users/{id}/roles/{role}")
+    public ApiResult<Void> assignRole(@PathVariable Long id, @PathVariable String role) {
+        admin.assignRole(id, role);
+        return ApiResult.ok(null, "已分配");
+    }
+
+    @DeleteMapping("/users/{id}/roles/{role}")
+    public ApiResult<Void> revokeRole(@PathVariable Long id, @PathVariable String role) {
+        admin.revokeRole(id, role);
+        return ApiResult.ok(null, "已撤销");
+    }
+
+    // ---------- roles ----------
+    @GetMapping("/roles")
+    public ApiResult<Object> listRoles(@RequestParam(required = false) String tenant) {
+        return ApiResult.ok(admin.listRoles(tenant));
+    }
+
+    @PostMapping("/roles")
+    public ApiResult<Void> createRole(@RequestBody Map<String, String> b) {
+        admin.createRole(b.get("code"), b.get("name"), b.get("tenantCode"));
+        return ApiResult.ok(null, "已创建");
+    }
+
+    @DeleteMapping("/roles/{code}")
+    public ApiResult<Void> deleteRole(@PathVariable String code) {
+        admin.deleteRole(code);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- permissions ----------
+    @GetMapping("/permissions")
+    public ApiResult<Object> listPermissions() {
+        return ApiResult.ok(admin.listPermissions());
+    }
+
+    @PostMapping("/permissions")
+    public ApiResult<Void> createPermission(@RequestBody Map<String, String> b) {
+        admin.createPermission(b.get("code"), b.get("type"), b.get("name"),
+                b.get("resource"), b.get("action"), b.get("spel"));
+        return ApiResult.ok(null, "已创建");
+    }
+
+    @DeleteMapping("/permissions/{code}")
+    public ApiResult<Void> deletePermission(@PathVariable String code) {
+        admin.deletePermission(code);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    @PostMapping("/roles/{role}/permissions/{perm}")
+    public ApiResult<Void> grant(@PathVariable String role, @PathVariable String perm) {
+        admin.grantPermission(role, perm);
+        return ApiResult.ok(null, "已授权");
+    }
+
+    @DeleteMapping("/roles/{role}/permissions/{perm}")
+    public ApiResult<Void> revoke(@PathVariable String role, @PathVariable String perm) {
+        admin.revokePermission(role, perm);
+        return ApiResult.ok(null, "已撤销");
+    }
+
+    // ---------- tenants ----------
+    @GetMapping("/tenants")
+    public ApiResult<Object> listTenants() {
+        return ApiResult.ok(admin.listTenants());
+    }
+
+    @PostMapping("/tenants")
+    public ApiResult<Void> upsertTenant(@RequestBody Map<String, Object> b) {
+        admin.upsertTenant((String) b.get("code"), (String) b.get("name"),
+                (String) b.get("isolationMode"), (String) b.get("ldapUrl"),
+                (String) b.get("ldapBase"), (Boolean) b.get("enabled"));
+        return ApiResult.ok(null, "已保存");
+    }
+
+    @DeleteMapping("/tenants/{code}")
+    public ApiResult<Void> deleteTenant(@PathVariable String code) {
+        admin.deleteTenant(code);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- oauth2 clients ----------
+    @GetMapping("/oauth2/clients")
+    public ApiResult<Object> listClients() {
+        return ApiResult.ok(admin.listClients());
+    }
+
+    @PostMapping("/oauth2/clients")
+    public ApiResult<Void> upsertClient(@RequestBody Map<String, String> b) {
+        admin.upsertClient(b.get("clientId"), b.get("clientSecret"),
+                b.get("grantTypes"), b.get("redirectUris"), b.get("scopes"));
+        return ApiResult.ok(null, "已保存");
+    }
+
+    @DeleteMapping("/oauth2/clients/{clientId}")
+    public ApiResult<Void> deleteClient(@PathVariable String clientId) {
+        admin.deleteClient(clientId);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- audit ----------
+    @GetMapping("/audit")
+    public ApiResult<Map<String, Object>> listAudit(@RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "50") int size,
+                                                     @RequestParam(required = false) Long userId) {
+        return ApiResult.ok(admin.listAudit(page, size, userId));
+    }
+
+    // ---------- config ----------
+    @GetMapping("/config")
+    public ApiResult<Map<String, Object>> config() {
+        return ApiResult.ok(admin.systemConfig());
+    }
+}
