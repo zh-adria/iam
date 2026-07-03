@@ -1,47 +1,83 @@
 <template>
   <div>
-    <div class="toolbar">
-      <el-input v-model="tenant" placeholder="按租户过滤" style="width:200px" clearable />
-      <el-button @click="load">查询</el-button>
-      <el-button type="primary" @click="showCreate = true">新建用户</el-button>
+    <div class="pane-toolbar">
+      <input v-model="tenant" class="neo-input" placeholder="按租户过滤" @keyup.enter="load" />
+      <button class="neo-btn ghost" style="width:auto;padding:8px 16px" @click="load">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        查询
+      </button>
+      <div class="spacer" />
+      <button class="neo-btn primary" style="width:auto;padding:8px 20px" @click="showCreate = true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新建用户
+      </button>
     </div>
-    <el-table :data="rows" v-loading="loading" border>
-      <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="username" label="用户名" />
-      <el-table-column prop="email" label="邮箱" />
-      <el-table-column prop="phone" label="手机" />
-      <el-table-column prop="tenant" label="租户" width="80" />
-      <el-table-column label="状态" width="80">
+
+    <el-table :data="rows" v-loading="loading" class="neo-table">
+      <el-table-column prop="id" label="ID" width="70" />
+      <el-table-column prop="username" label="用户名" min-width="120" />
+      <el-table-column prop="email" label="邮箱" min-width="180" />
+      <el-table-column prop="phone" label="手机" width="120" />
+      <el-table-column prop="tenant" label="租户" width="100" />
+      <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 1 ? 'success' : 'danger'">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
+          <span :class="['status-dot', row.status === 1 ? 'active' : 'inactive']" />
+          <span class="status-text">{{ row.status === 1 ? '启用' : '禁用' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="角色">
+      <el-table-column label="角色" min-width="150">
         <template #default="{ row }">
-          <el-tag v-for="r in row.roles" :key="r" size="small" style="margin-right:4px">{{ r }}</el-tag>
+          <span v-for="r in row.roles" :key="r" class="neo-tag accent">{{ r }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280">
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="onReset(row)">重置密码</el-button>
-          <el-button size="small" @click="onToggle(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
-          <el-button size="small" @click="onUnlock(row)" :disabled="row.status !== 2">解锁</el-button>
-          <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
+          <button class="action-btn" @click="onReset(row)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            重置密码
+          </button>
+          <button class="action-btn" @click="onToggle(row)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            {{ row.status === 1 ? '禁用' : '启用' }}
+          </button>
+          <button class="action-btn" :disabled="row.status !== 2" @click="onUnlock(row)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>
+            解锁
+          </button>
+          <button class="action-btn danger" @click="onDelete(row)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            删除
+          </button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="showCreate" title="新建用户" width="480px">
-      <el-form label-width="80px">
-        <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="form.password" type="password" /></el-form-item>
-        <el-form-item label="邮箱"><el-input v-model="form.email" /></el-form-item>
-        <el-form-item label="手机"><el-input v-model="form.phone" /></el-form-item>
-        <el-form-item label="租户"><el-input v-model="form.tenantCode" /></el-form-item>
-      </el-form>
+    <el-dialog v-model="showCreate" title="新建用户" width="460px" class="neo-dialog">
+      <div class="dialog-form">
+        <div class="input-group">
+          <label class="input-label">用户名</label>
+          <input v-model="form.username" class="neo-input" placeholder="输入用户名" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">密码</label>
+          <input v-model="form.password" type="password" class="neo-input" placeholder="输入密码" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">邮箱</label>
+          <input v-model="form.email" class="neo-input" placeholder="user@example.com" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">手机</label>
+          <input v-model="form.phone" class="neo-input" placeholder="138xxxx" />
+        </div>
+        <div class="input-group">
+          <label class="input-label">租户</label>
+          <input v-model="form.tenantCode" class="neo-input" placeholder="default" />
+        </div>
+      </div>
       <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
-        <el-button type="primary" @click="onCreate">创建</el-button>
+        <button class="neo-btn ghost" @click="showCreate = false">取消</button>
+        <button class="neo-btn primary" style="width:auto" @click="onCreate">创建</button>
       </template>
     </el-dialog>
   </div>
@@ -60,10 +96,8 @@ const form = ref({ username: '', password: '', email: '', phone: '', tenantCode:
 
 async function load(): Promise<void> {
   loading.value = true
-  try {
-    const r = await adminApi.listUsers(1, 50, tenant.value || undefined)
-    rows.value = r.rows
-  } finally { loading.value = false }
+  try { rows.value = (await adminApi.listUsers(1, 50, tenant.value || undefined)).rows }
+  finally { loading.value = false }
 }
 async function onCreate(): Promise<void> {
   await adminApi.createUser(form.value)
@@ -95,5 +129,58 @@ onMounted(load)
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.spacer { flex: 1; }
+
+.neo-input { width: 200px; }
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  margin-right: 4px;
+}
+.action-btn:hover { color: var(--text-primary); border-color: var(--border-hover); background: rgba(255,255,255,0.08); }
+.action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.action-btn.danger { color: var(--danger); }
+.action-btn.danger:hover { border-color: var(--danger); background: rgba(255,71,87,0.1); }
+
+.neo-tag.accent {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: rgba(0, 212, 255, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  margin-right: 4px;
+  margin-bottom: 2px;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success-glow); }
+.status-dot.inactive { background: var(--danger); box-shadow: 0 0 6px var(--danger-glow); }
+.status-text { font-size: 0.85rem; }
+
+.dialog-form { display: flex; flex-direction: column; gap: 14px; }
 </style>
