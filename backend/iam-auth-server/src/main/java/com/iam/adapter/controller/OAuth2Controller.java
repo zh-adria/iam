@@ -47,9 +47,17 @@ public class OAuth2Controller {
             return;
         }
         if (principal == null || principal.getUserId() == null) {
-            String loginUrl = "/login?return_to=" + URLEncoder.encode("/iam/oauth/authorize?"
-                    + requestQuery(response_type, client_id, redirect_uri, scope, state,
-                            code_challenge, code_challenge_method, nonce), StandardCharsets.UTF_8);
+            StringBuilder q = new StringBuilder("response_type=").append(response_type)
+                    .append("&client_id=").append(client_id)
+                    .append("&redirect_uri=").append(URLEncoder.encode(redirect_uri, StandardCharsets.UTF_8));
+            if (scope != null) q.append("&scope=").append(URLEncoder.encode(scope, StandardCharsets.UTF_8));
+            if (state != null) q.append("&state=").append(state);
+            if (code_challenge != null) {
+                q.append("&code_challenge=").append(code_challenge)
+                        .append("&code_challenge_method=").append(code_challenge_method);
+            }
+            if (nonce != null) q.append("&nonce=").append(URLEncoder.encode(nonce, StandardCharsets.UTF_8));
+            String loginUrl = "/login?return_to=" + URLEncoder.encode("/iam/oauth/authorize?" + q, StandardCharsets.UTF_8);
             res.sendRedirect(loginUrl);
             return;
         }
@@ -139,21 +147,5 @@ public class OAuth2Controller {
         Map<String, Object> m = new HashMap<>();
         m.put("keys", new Object[0]);
         return m;
-    }
-
-    private String requestQuery(String rt, String cid, String ruri, String scope, String state,
-                                String challenge, String method, String nonce) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("response_type=").append(rt)
-          .append("&client_id=").append(cid)
-          .append("&redirect_uri=").append(URLEncoder.encode(ruri, StandardCharsets.UTF_8));
-        if (scope != null) sb.append("&scope=").append(URLEncoder.encode(scope, StandardCharsets.UTF_8));
-        if (state != null) sb.append("&state=").append(state);
-        if (challenge != null) {
-            sb.append("&code_challenge=").append(challenge)
-              .append("&code_challenge_method=").append(method);
-        }
-        if (nonce != null) sb.append("&nonce=").append(URLEncoder.encode(nonce, StandardCharsets.UTF_8));
-        return sb.toString();
     }
 }

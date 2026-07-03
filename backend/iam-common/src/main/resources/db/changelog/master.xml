@@ -26,7 +26,6 @@
             <column name="password_hash" type="varchar(255)"><constraints nullable="false"/></column>
             <column name="email" type="varchar(128)"/>
             <column name="phone" type="varchar(32)"/>
-            <column name="id_card" type="varchar(18)"/>
             <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
             <column name="status" type="int" defaultValueNumeric="1"><constraints nullable="false"/></column>
             <column name="mfa_secret" type="varchar(255)"/>

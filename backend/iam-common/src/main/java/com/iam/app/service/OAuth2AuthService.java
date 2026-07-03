@@ -27,6 +27,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -160,7 +161,7 @@ public class OAuth2AuthService {
         // PKCE verification (S256 only; plain deprecated)
         if (e.getCodeChallenge() != null) {
             if (codeVerifier == null) throw new AuthException("PKCE_REQUIRED", "缺少 code_verifier");
-            String expected = base64Url(sha256(codeVerifier));
+            String expected = Base64.getUrlEncoder().withoutPadding().encodeToString(sha256(codeVerifier));
             if (!expected.equals(e.getCodeChallenge()))
                 throw new AuthException("PKCE_FAILED", "code_verifier 校验失败");
         }
@@ -198,7 +199,7 @@ public class OAuth2AuthService {
     private TokenResponse clientCredentialsGrant(String clientId, String clientSecret, String scope) {
         OAuth2ClientEntity c = validateClient(clientId, clientSecret, "client_credentials", null);
         String scopes = intersectScopes(c.getScopes(), scope);
-        List<String> scopeList = split(scopes);
+        List<String> scopeList = scopes == null || scopes.isEmpty() ? Collections.emptyList() : Arrays.asList(scopes.split(","));
         String access = jwt.issueAccess(0L, "client:" + clientId, "system",
                 Collections.emptyList(), scopeList, clientId);
         return TokenResponse.builder()
@@ -211,7 +212,7 @@ public class OAuth2AuthService {
     // ---------- helpers ----------
 
     private TokenResponse issueTokenPair(UserEntity u, String clientId, String scopes, String nonce, boolean includeIdToken) {
-        List<String> scopeList = split(scopes);
+        List<String> scopeList = scopes == null || scopes.isEmpty() ? Collections.emptyList() : Arrays.asList(scopes.split(","));
         String access = jwt.issueAccess(u.getId(), u.getUsername(), u.getTenantCode(),
                 Collections.emptyList(), scopeList, clientId);
         String refreshToken = java.util.UUID.randomUUID().toString().replace("-", "") + "." + Long.toHexString(u.getId());
@@ -266,6 +267,12 @@ public class OAuth2AuthService {
         return c;
     }
 
+    private static byte[] sha256(String s) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+    }
+
     private String intersectScopes(String clientScopes, String requested) {
         if (requested == null || requested.isEmpty()) return clientScopes;
         Set<String> allowed = new HashSet<>(Arrays.asList(clientScopes.split(",")));
@@ -274,19 +281,4 @@ public class OAuth2AuthService {
         return String.join(",", want);
     }
 
-    private List<String> split(String s) {
-        if (s == null || s.isEmpty()) return Collections.emptyList();
-        return Arrays.asList(s.split(","));
-    }
-
-    private static byte[] sha256(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(s.getBytes(StandardCharsets.UTF_8));
-        } catch (Exception e) { throw new RuntimeException(e); }
-    }
-
-    private static String base64Url(byte[] b) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(b);
-    }
 }

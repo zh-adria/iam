@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,14 +40,16 @@ public class CasAuthService {
     public String authorizeUrl() {
         if (casServerUrl == null || casServerUrl.isEmpty())
             throw new AuthException("CAS_NOT_CONFIGURED", "iam.cas.server-url 未配置");
-        return casServerUrl + "/login?service=" + enc(serviceUrl);
+        return casServerUrl + "/login?service=" + URLEncoder.encode(serviceUrl, StandardCharsets.UTF_8);
     }
 
     @Transactional
     public TokenResponse callback(String ticket, String ip) {
         if (casServerUrl == null || casServerUrl.isEmpty())
             throw new AuthException("CAS_NOT_CONFIGURED", "CAS 未配置");
-        String validateUrl = casServerUrl + "/serviceValidate?ticket=" + enc(ticket) + "&service=" + enc(serviceUrl);
+        String validateUrl = casServerUrl + "/serviceValidate?ticket="
+                + URLEncoder.encode(ticket, StandardCharsets.UTF_8)
+                + "&service=" + URLEncoder.encode(serviceUrl, StandardCharsets.UTF_8);
         String body;
         try {
             body = http.getForObject(validateUrl, String.class);
@@ -54,7 +58,7 @@ public class CasAuthService {
         }
         if (body == null || !body.contains("<cas:authenticationSuccess>"))
             throw new AuthException("CAS_FAIL", "ticket 无效");
-        String uid = extract(body, "cas:user");
+        String uid = extractTag(body, "cas:user");
         if (uid == null || uid.isEmpty()) throw new AuthException("CAS_FAIL", "未取到 CAS user");
 
         UserEntity u = userRepo.findByUsernameAndTenantCode(uid, "default")
@@ -74,13 +78,9 @@ public class CasAuthService {
                 .build();
     }
 
-    private static String extract(String xml, String tag) {
+    private static String extractTag(String xml, String tag) {
         Pattern p = Pattern.compile("<" + tag + ">([^<]+)</" + tag + ">");
         Matcher m = p.matcher(xml);
         return m.find() ? m.group(1) : null;
-    }
-
-    private static String enc(String s) {
-        return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
     }
 }

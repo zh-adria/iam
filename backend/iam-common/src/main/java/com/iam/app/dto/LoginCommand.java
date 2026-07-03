@@ -9,8 +9,6 @@ public class LoginCommand {
     private String password;
     private String phone;
     private String smsCode;
-    private String email;
-    private String emailCode;
     private String tenantCode;
     private String clientId;
     private String grantType; // password, sms, email, social

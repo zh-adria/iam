@@ -25,15 +25,6 @@ spring:
     port: 6379
     password: ${REDIS_PASS:}
     timeout: 3000ms
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: ${OAUTH_GOOGLE_ID:}
-            client-secret: ${OAUTH_GOOGLE_SECRET:}
-            scope: openid, profile, email
-
 iam:
   jwt:
     # ponytail: HS256 for demo single-instance. Switch to RS256 + key pair when multiple resource servers verify tokens.
@@ -51,10 +42,6 @@ iam:
     totp-period: 30
   ratelimit:
     login-per-minute: 10
-  tenant:
-    default: default
-  audit:
-    tamper-proof: true
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
   saml:
@@ -109,19 +96,6 @@ iam:
     # ponytail: CAS server base URL. SP-style: validate service ticket via /cas/serviceValidate
     server-url:
     service-url: http://localhost:8080/iam/api/auth/cas/callback
-  webauthn:
-    # ponytail: stub — Spring Security WebAuthn not in 2.7. Returns 501 until implemented.
-    enabled: false
-    rp-id: localhost
-    rp-name: IAM-Platform
-    origin: http://localhost:5173
-  scim:
-    # ponytail: stub — /scim/v2/Users returns empty list. Implement per RFC 7643 when federating with IdP.
-    enabled: false
-  kerberos:
-    # ponytail: stub — emits WWW-Authenticate: Negotiate. Wire JAAS + krb5.conf + org.ietf.jgss to enable.
-    enabled: false
-    realm:
 
 logging:
   level:

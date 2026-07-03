@@ -30,7 +30,6 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
-    private final com.iam.infrastructure.security.KerberosSpnegoFilter kerberosFilter;
     private final AuthenticationSuccessHandler samlSuccessHandler;
 
     @Value("${iam.cors.allowed-origins:http://localhost:5173}")
@@ -67,15 +66,12 @@ public class SecurityConfig {
                     "/login/saml2/**",
                     "/saml2/**",
                     "/saml/metadata/**",
-                    "/cas/**",
-                    "/scim/**",
-                    "/api/auth/kerberos"
+                    "/cas/**"
                 ).permitAll()
                 .antMatchers("/oauth/authorize").authenticated()
                 .anyRequest().authenticated()
             .and()
             .saml2Login(saml -> saml.successHandler(samlSuccessHandler))
-            .addFilterBefore(kerberosFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

@@ -8,17 +8,18 @@ import com.iam.infrastructure.security.PasswordHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
 /**
- * Idempotent demo seeder. Runs on every startup; creates demo tenant/users/roles/permissions
- * only if they don't already exist. Safe to disable in production.
- * ponytail: hardcoded demo creds in code so login works out-of-the-box without manual hashing.
+ * Idempotent demo seeder. Runs on every startup in 'demo' profile; creates demo tenant/users/roles/permissions
+ * only if they don't already exist. Production starts with {@code spring.profiles.active} excluding 'demo'.
  */
 @Slf4j
 @Component
+@Profile({"demo", "test"})
 @RequiredArgsConstructor
 public class DemoSeeder implements CommandLineRunner {
 

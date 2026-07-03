@@ -108,7 +108,9 @@ public class AuthAppService {
         UserEntity user = userRepo.findById(rt.getUserId())
                 .orElseThrow(() -> new AuthException("USER_NOT_FOUND", "用户不存在"));
         auditSvc.record(user.getId(), rt.getTenantCode(), "TOKEN_REFRESH", "SUCCESS", user.getUsername(), null, "refresh");
-        return issueTokens(user, rt.getClientId(), parseScopes(rt.getScopes()));
+        List<String> scopes = rt.getScopes() == null || rt.getScopes().isEmpty()
+                ? Collections.emptyList() : Arrays.asList(rt.getScopes().split(","));
+        return issueTokens(user, rt.getClientId(), scopes);
     }
 
     @Transactional
@@ -168,11 +170,6 @@ public class AuthAppService {
         if (!tenantRepo.findByCode(tenant).isPresent()) {
             throw new AuthException("TENANT_NOT_FOUND", "租户不存在");
         }
-    }
-
-    private List<String> parseScopes(String s) {
-        if (s == null || s.isEmpty()) return Collections.emptyList();
-        return Arrays.asList(s.split(","));
     }
 
     private AuthException auditFail(Long uid, String tenant, LoginCommand cmd, String code, String msg) {

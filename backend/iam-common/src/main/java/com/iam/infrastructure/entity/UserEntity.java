@@ -17,8 +17,6 @@ public class UserEntity {
     private String passwordHash;
     private String email;
     private String phone;
-    @Column(length = 18)
-    private String idCard;
     @Column(nullable = false, length = 32)
     private String tenantCode;
     @Column(nullable = false)

@@ -60,8 +60,12 @@ public class LdapAuthService {
         String email = null, displayName = username;
         try {
             List<java.util.Map<String,String>> attrs = t.search(
-                    "", "(uid=" + username + ")",
-                    (AttributesMapper<java.util.Map<String,String>>) this::mapAttrs);
+                    "", "(uid=" + username + ")", (AttributesMapper<java.util.Map<String,String>>) a -> {
+                        java.util.Map<String,String> m = new java.util.HashMap<>();
+                        if (a.get("mail") != null) m.put("mail", a.get("mail").get().toString());
+                        if (a.get("cn") != null) m.put("cn", a.get("cn").get().toString());
+                        return m;
+                    });
             if (!attrs.isEmpty()) {
                 email = attrs.get(0).get("mail");
                 String cn = attrs.get(0).get("cn");
@@ -101,12 +105,5 @@ public class LdapAuthService {
                 .providerUsername(displayName)
                 .build());
         return u;
-    }
-
-    private java.util.Map<String,String> mapAttrs(Attributes a) throws javax.naming.NamingException {
-        java.util.Map<String,String> m = new java.util.HashMap<>();
-        if (a.get("mail") != null) m.put("mail", a.get("mail").get().toString());
-        if (a.get("cn") != null) m.put("cn", a.get("cn").get().toString());
-        return m;
     }
 }

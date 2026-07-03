@@ -14,7 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * ponytail: global map — fine for single instance. Upgrade: Redis SETEX when scaling.
  */
 @Component
-@RequiredArgsConstructor
 public class AuthCodeStore {
 
     private static final long CODE_TTL_SEC = 60;
@@ -23,7 +22,6 @@ public class AuthCodeStore {
     @Data
     @RequiredArgsConstructor
     public static class Entry {
-        private final String code;
         private final Long userId;
         private final String clientId;
         private final String redirectUri;
@@ -35,14 +33,10 @@ public class AuthCodeStore {
         private boolean used;
     }
 
-    public String issue(Long userId, String clientId, String redirectUri, String scopes) {
-        return issue(userId, clientId, redirectUri, scopes, null, null, null);
-    }
-
     public String issue(Long userId, String clientId, String redirectUri, String scopes,
                         String codeChallenge, String codeChallengeMethod, String nonce) {
         String code = UUID.randomUUID().toString().replace("-", "");
-        store.put(code, new Entry(code, userId, clientId, redirectUri, scopes, Instant.now(),
+        store.put(code, new Entry(userId, clientId, redirectUri, scopes, Instant.now(),
                 codeChallenge, codeChallengeMethod, nonce));
         return code;
     }
