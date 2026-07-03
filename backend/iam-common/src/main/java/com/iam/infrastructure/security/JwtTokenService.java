@@ -7,17 +7,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
-import javax.crypto.SecretKey;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPrivateKeySpec;
 import java.security.spec.RSAPublicKeySpec;
-import java.security.spec.X509EncodedKeySpec;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
@@ -27,9 +27,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * JWT service with RS256 (RSA keypair). Auto-generates a 2048-bit keypair on startup
- * when no PEM is configured; for stable keys across restarts, set iam.jwt.rsa-private-key-pem
- * / iam.jwt.rsa-public-key-pem.
+ * JWT service with RS256 (RSA keypair).
+ *
+ * Default: deterministic keypair derived from the issuer name so that auth-server
+ * and admin-server (two JVMs) share the same keypair without extra config.
+ * Override with iam.jwt.rsa-private-key-pem / iam.jwt.rsa-public-key-pem for prod.
  */
 @Slf4j
 @Component
@@ -53,16 +55,19 @@ public class JwtTokenService {
 
     @PostConstruct
     public void init() {
-        // 1) try PEM from config  2) fall back to HS256 sym-key  3) else generate RSA keypair
-        // (priority kept simple here: auto-generate RSA when no PEM present)
         try {
-            java.security.KeyPairGenerator gen = java.security.KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
+            // Deterministic keypair from issuer name as SecureRandom seed — same keypair
+            // every startup, same across all services sharing the same issuer.
+            byte[] seed = issuer.getBytes(StandardCharsets.UTF_8);
+            SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
+            sr.setSeed(seed);
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048, sr);
             KeyPair kp = gen.generateKeyPair();
             this.privateKey = (RSAPrivateKey) kp.getPrivate();
             this.publicKey = (RSAPublicKey) kp.getPublic();
-            this.kid = UUID.randomUUID().toString().substring(0, 8);
-            log.info("JwtTokenService initialized with auto-generated RSA-2048 keypair, kid={} (set iam.jwt.rsa-*.pem to stabilize across restarts)", kid);
+            this.kid = UUID.nameUUIDFromBytes(seed).toString().substring(0, 8);
+            log.info("JwtTokenService initialized with deterministic RSA-2048 keypair (kid={}), derived from issuer '{}'", kid, issuer);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize JWT keypair", e);
         }
@@ -135,7 +140,6 @@ public class JwtTokenService {
     public Map<String, Object> jwk() {
         if (publicKey == null) return Map.of();
         byte[] n = publicKey.getModulus().toByteArray();
-        // strip leading zero if present (BigInteger sign bit)
         if (n.length > 1 && n[0] == 0) n = java.util.Arrays.copyOfRange(n, 1, n.length);
         String nB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(n);
         String eB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(publicKey.getPublicExponent().toByteArray());
