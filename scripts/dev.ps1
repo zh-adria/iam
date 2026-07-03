@@ -125,6 +125,11 @@ function Ensure-Redis {
     New-Item -ItemType Directory -Force -Path $redisDir | Out-Null
     $zip = Join-Path $redisDir 'redis.zip'
     $url = 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip'
+    # cleanup any stale partial download from a previous failed run
+    if (Test-Path $zip) {
+      Write-Host "      removing stale redis.zip from a previous failed download"
+      Remove-Item $zip -Force -ErrorAction SilentlyContinue
+    }
     Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
     Expand-Archive -Path $zip -DestinationPath $redisDir -Force
     Remove-Item $zip -Force
