@@ -16,11 +16,11 @@ function Find-JavaHome {
   # honor env override
   if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe")) { return $env:JAVA_HOME }
   # try registry
-  foreach (@('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
+  foreach ($regPath in @('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
     try {
-      $ver = (Get-ItemProperty $via ErrorAction SilentlyContinue).CurrentVersion
+      $ver = (Get-ItemProperty $regPath -ErrorAction SilentlyContinue).CurrentVersion
       if ($ver) {
-        $home = (Get-ItemProperty "$via\$ver" -ErrorAction SilentlyContinue).JavaHome
+        $home = (Get-ItemProperty "$regPath\$ver" -ErrorAction SilentlyContinue).JavaHome
         if ($home -and (Test-Path "$home\bin\java.exe")) { return $home }
       }
     } catch {}

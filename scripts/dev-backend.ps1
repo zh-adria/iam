@@ -5,11 +5,11 @@ Set-Location $root
 
 function Find-JavaHome {
   if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe")) { return $env:JAVA_HOME }
-  foreach (@('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
+  foreach ($regPath in @('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
     try {
-      $ver = (Get-ItemProperty $_ -ErrorAction SilentlyContinue).CurrentVersion
+      $ver = (Get-ItemProperty $regPath -ErrorAction SilentlyContinue).CurrentVersion
       if ($ver) {
-        $home = (Get-ItemProperty "$_\$ver" -ErrorAction SilentlyContinue).JavaHome
+        $home = (Get-ItemProperty "$regPath\$ver" -ErrorAction SilentlyContinue).JavaHome
         if ($home -and (Test-Path "$home\bin\java.exe")) { return $home }
       }
     } catch {}
