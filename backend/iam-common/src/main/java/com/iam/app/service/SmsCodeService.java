@@ -7,6 +7,7 @@ import com.iam.infrastructure.repository.UserRepository;
 import com.iam.infrastructure.security.AuditLogService;
 import com.iam.infrastructure.security.JwtTokenService;
 import com.iam.infrastructure.security.TokenCacheService;
+import com.iam.infrastructure.sms.SmsSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +20,7 @@ import java.util.Collections;
 
 /**
  * SMS verification code: send + verify. Stored in Redis with TTL.
- * ponytail: sender is a stub (logs code). Wire Aliyun/Tencent SMS SDK in send() for prod.
+ * Sender is pluggable via SmsSender interface (stub / aliyun / tencent).
  */
 @Slf4j
 @Service
@@ -30,19 +31,22 @@ public class SmsCodeService {
     private final UserRepository userRepo;
     private final JwtTokenService jwt;
     private final AuditLogService audit;
+    private final SmsSender smsSender;
     private final SecureRandom rng = new SecureRandom();
 
     @Value("${iam.sms.code-ttl-seconds:300}") private long ttlSec;
     @Value("${iam.sms.code-length:6}") private int codeLength;
-    @Value("${iam.sms.aliyun-sign-name:}") private String signName;
-    @Value("${iam.sms.aliyun-template-code:}") private String templateCode;
 
     public void send(String phone) {
         if (phone == null || phone.length() < 7) throw new AuthException("BAD_PHONE", "手机号格式错误");
         String code = generate();
         cache.cacheSmsCode(phone, code, Duration.ofSeconds(ttlSec));
-        // ponytail: stub sender — wire real SMS SDK here.
-        log.info("[SMS-STUB] send to {}: code={} (ttl={}s)", phone, code, ttlSec);
+        try {
+            smsSender.send(phone, code);
+        } catch (Exception e) {
+            log.error("SMS send failed via {}: {}", smsSender.providerName(), e.getMessage());
+            throw new AuthException("SMS_SEND_FAILED", "短信发送失败");
+        }
     }
 
     public boolean verify(String phone, String code) {
@@ -55,7 +59,6 @@ public class SmsCodeService {
     @Transactional
     public TokenResponse loginOrProvision(String phone, String code, String ip) {
         if (!verify(phone, code)) throw new AuthException("SMS_FAIL", "验证码错误或已过期");
-        // ponytail: find by phone, else provision a phone-only account. Real impl may require pre-registration.
         UserEntity u = userRepo.findByPhone(phone)
                 .orElseGet(() -> userRepo.save(UserEntity.builder()
                         .username("sms_" + phone)

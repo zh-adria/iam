@@ -90,6 +90,28 @@
             <artifactId>java-otp</artifactId>
         </dependency>
 
+        <!-- Aliyun SMS SDK (Dysmsapi 2017-05-25) — optional, only when iam.sms.provider=aliyun -->
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>dysmsapi20170525</artifactId>
+            <version>4.1.0</version>
+        </dependency>
+
+        <!-- JavaMail for SMTP Magic Link sender -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Alipay SDK (RSA2 signing) — optional, only when social.alipay.app-id set.
+             The platform compiles without it (reflection-loaded); add to classpath per-env. -->
+        <dependency>
+            <groupId>com.alipay.sdk</groupId>
+            <artifactId>alipay-sdk-java</artifactId>
+            <version>4.38.157.ALL</version>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

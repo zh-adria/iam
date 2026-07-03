@@ -162,6 +162,33 @@ public class AdminController {
         return ApiResult.ok(null, "已删除");
     }
 
+    // ---------- SAML IdP registrations ----------
+    @GetMapping("/saml/idps")
+    public ApiResult<Object> listSamlIdps(@RequestParam(required = false) String tenant) {
+        return ApiResult.ok(admin.listSamlIdps(tenant));
+    }
+
+    @PostMapping("/saml/idps")
+    public ApiResult<Void> upsertSamlIdp(@RequestBody Map<String, Object> b) {
+        admin.upsertSamlIdp(
+                (String) b.get("tenantCode"),
+                (String) b.get("registrationId"),
+                (String) b.get("idpEntityId"),
+                (String) b.get("idpSsoUrl"),
+                (String) b.get("idpMetadataUrl"),
+                (String) b.get("idpMetadataXml"),
+                (String) b.get("spEntityId"),
+                (String) b.get("acsTemplate"),
+                (Boolean) b.get("enabled"));
+        return ApiResult.ok(null, "已保存");
+    }
+
+    @DeleteMapping("/saml/idps/{tenantCode}/{registrationId}")
+    public ApiResult<Void> deleteSamlIdp(@PathVariable String tenantCode, @PathVariable String registrationId) {
+        admin.deleteSamlIdp(tenantCode, registrationId);
+        return ApiResult.ok(null, "已删除");
+    }
+
     // ---------- audit ----------
     @GetMapping("/audit")
     public ApiResult<Map<String, Object>> listAudit(@RequestParam(defaultValue = "1") int page,

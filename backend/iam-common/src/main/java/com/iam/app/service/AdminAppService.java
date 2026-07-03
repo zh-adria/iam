@@ -5,6 +5,7 @@ import com.iam.domain.AuthException;
 import com.iam.infrastructure.entity.*;
 import com.iam.infrastructure.repository.*;
 import com.iam.infrastructure.security.PasswordHasher;
+import org.springframework.dao.DataIntegrityViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class AdminAppService {
     private final TenantRepository tenantRepo;
     private final AuditLogRepository auditRepo;
     private final OAuth2ClientRepository clientRepo;
+    private final SamlIdpRegistrationRepository samlRepo;
     private final PasswordHasher hasher;
 
     // ---------- users ----------
@@ -276,6 +278,49 @@ public class AdminAppService {
         m.put("detail", a.getDetail());
         m.put("occurredAt", a.getOccurredAt());
         m.put("prevHash", a.getHashChainPrev());
+        return m;
+    }
+
+    // ---------- SAML IdP registrations ----------
+    public List<Map<String, Object>> listSamlIdps(String tenant) {
+        List<SamlIdpRegistrationEntity> all = tenant == null || tenant.isEmpty()
+                ? samlRepo.findAll() : samlRepo.findByTenantCode(tenant);
+        return all.stream().map(this::samlRow).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void upsertSamlIdp(String tenantCode, String registrationId, String idpEntityId,
+                              String idpSsoUrl, String idpMetadataUrl, String idpMetadataXml,
+                              String spEntityId, String acsTemplate, Boolean enabled) {
+        SamlIdpRegistrationEntity e = samlRepo.findByTenantCodeAndRegistrationId(tenantCode, registrationId)
+                .orElseGet(() -> SamlIdpRegistrationEntity.builder()
+                        .tenantCode(tenantCode).registrationId(registrationId).build());
+        if (idpEntityId != null) e.setIdpEntityId(idpEntityId);
+        if (idpSsoUrl != null) e.setIdpSsoUrl(idpSsoUrl);
+        if (idpMetadataUrl != null) e.setIdpMetadataUrl(idpMetadataUrl);
+        if (idpMetadataXml != null) e.setIdpMetadataXml(idpMetadataXml);
+        if (spEntityId != null) e.setSpEntityId(spEntityId);
+        if (acsTemplate != null) e.setAcsTemplate(acsTemplate);
+        if (enabled != null) e.setEnabled(enabled);
+        samlRepo.save(e);
+    }
+
+    @Transactional
+    public void deleteSamlIdp(String tenantCode, String registrationId) {
+        samlRepo.findByTenantCodeAndRegistrationId(tenantCode, registrationId).ifPresent(samlRepo::delete);
+    }
+
+    private Map<String, Object> samlRow(SamlIdpRegistrationEntity e) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", e.getId());
+        m.put("tenantCode", e.getTenantCode());
+        m.put("registrationId", e.getRegistrationId());
+        m.put("idpEntityId", e.getIdpEntityId());
+        m.put("idpSsoUrl", e.getIdpSsoUrl());
+        m.put("idpMetadataUrl", e.getIdpMetadataUrl());
+        m.put("spEntityId", e.getSpEntityId());
+        m.put("acsTemplate", e.getAcsTemplate());
+        m.put("enabled", e.getEnabled());
         return m;
     }
 

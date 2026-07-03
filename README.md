@@ -55,21 +55,25 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar
 | **OIDC Discovery + UserInfo + ID Token** | ✅ | `/.well-known/openid-configuration`、`/oauth/userinfo`、token 响应含 `id_token` |
 | **RFC 7662 令牌内省** | ✅ | `POST /oauth/introspect` |
 | **RFC 7009 令牌撤销** | ✅ | `POST /oauth/revoke` |
-| JWKS | ✅ | `GET /oauth/jwks`（HS256 模式返回空数组） |
-| SAML 2.0 SP | ✅ | `/saml2/authenticate/default`、`/login/saml2/sso/default` |
-| **SAML IdP metadata URL 自动加载** | ✅ | `iam.saml.idp.metadata-url` |
+| JWKS | ✅ | `GET /oauth/jwks`（RS256 公钥，alg=RS256, kid） |
+| SAML 2.0 SP | ✅ | `/saml2/authenticate/{registrationId}`、`/login/saml2/sso/{registrationId}` |
+| **JPA SAML IdP 多租户注册** | ✅ | `iam_saml_idp_registration`，Admin CRUD `/admin/api/saml/idps` |
 | LDAP/AD 认证 | ✅ | `POST /api/auth/ldap` |
 | **CAS SSO (CAS 2.0 serviceValidate)** | ✅ | `/api/auth/cas/{authorize,callback}` |
 | **微信/支付宝/QQ/钉钉/企业微信** | ✅ | `/api/auth/social/{provider}/{authorize,callback}` |
 | **短信验证码登录** | ✅ | `/api/auth/sms/{send,login}` |
 | **Magic Link** | ✅ | `/api/auth/magic/{send,verify}` |
 | 审计日志（哈希链防篡改） | ✅ | `iam_audit_log` |
-| WebAuthn/FIDO2 | 🔶 stub | `/api/auth/webauthn/{register,auth}/{begin,finish}` — 需接入 spring-security-webauthn |
-| Kerberos/SPNEGO | 🔶 stub | `/api/auth/kerberos` — 发 `WWW-Authenticate: Negotiate`，需 JAAS + krb5.conf |
-| SCIM 2.0 | 🔶 stub | `/scim/v2/Users`、`/scim/v2/ServiceProviderConfigs` — 需实现 RFC 7643/7644 |
-| OIDC RS256 + 真 JWKS | 🔶 | 当前 HS256 共享密钥；多 RS 验签时切换 |
-| Schema-per-tenant | 🔶 | 建模已存，未实装 |
-| ABAC SpEL 求值 | 🔶 | `PermissionEntity.spelExpression` 已存 |
+| **OIDC RS256 + 真 JWKS** | ✅ | 启动时自动生成 RSA-2048，可按 `iam.jwt.rsa-*-pem` 固定 |
+| **ABAC SpEL 求值** | ✅ | `@PreAuthorize("hasPermission(#id,'perm:code')")`，SpEL 引用 `#uid/#tenant/#roles/#target/#action` |
+| **Schema-per-tenant (SCHEMA 策略)** | ✅ | `iam.tenant.multi-tenant-enabled=true` + `isolation_mode='SCHEMA_PER_TENANT'` |
+| **按租户多 LDAP** | ✅ | 租户管理配置 `ldapUrl/ldapBase`，运行时 `LdapTemplate` 工厂复用 |
+| **SMS 可插拔发送器** | ✅ | `provider=stub\|aliyun`，实现 `SmsSender` 接口即可扩展 |
+| **SMTP Magic Link** | ✅ | `provider=smtp` + `iam.smtp.*` 配置 |
+| **支付宝 SDK (RSA2)** | ✅ | `provider=alipay` + SDK 在 classpath，RSA2 自动验签 |
+| WebAuthn/FIDO2 | 🔶 | 需接入 `spring-security-webauthn`（Spring Boot 2.7 不内置） |
+| Kerberos/SPNEGO | 🔶 | 需 JAAS krb5 + `org.ietf.jgss` |
+| SCIM 2.0 | 🔶 | 需 `scim2-sdk` 实现 `/scim/v2/Users` 全 CRUD |
 
 > `ponytail:` 标注处为已知简化点与升级路径。
 
@@ -174,6 +178,11 @@ DELETE /iam/admin/api/oauth2/clients/{clientId}
 
 GET  /iam/admin/api/audit             ?page&size&userId
 GET  /iam/admin/api/config
+
+# SAML IdP 多租户注册 CRUD (新增)
+GET  /iam/admin/api/saml/idps         ?tenant
+POST /iam/admin/api/saml/idps         { tenantCode, registrationId, idpEntityId, idpSsoUrl, idpMetadataUrl, spEntityId, acsTemplate, enabled }
+DELETE /iam/admin/api/saml/idps/{tenantCode}/{registrationId}
 ```
 
 ## 架构分层（Cola 4.0 标准布局）
@@ -208,16 +217,24 @@ com.iam/
     entity/                    User/Role/Permission/OAuth2Client/RefreshToken/AuditLog/Tenant/SocialBinding
     repository/                Spring Data JPA 接口
     security/
-      JwtTokenService          JWT 颁发/解析 + ID Token
-      JwtAuthFilter            Bearer token 过滤器
+      JwtTokenService          RS256 JWT 颁发/解析 + ID Token + JWK
+      JwtAuthFilter            Bearer token 过滤器 + 租户上下文注入
       TotpService              RFC 6238 TOTP
       TokenCacheService        Redis 缓存 + 限流 + 锁定 + SMS/Magic 令牌
       AuthCodeStore            OAuth2 授权码内存存储（含 PKCE 字段）
       PasswordHasher           BCrypt
       AuditLogService          异步审计 + 哈希链
-      KerberosSpnegoFilter     SPNEGO 401 challenge（stub）
+      AbacPermissionEvaluator  ABAC SpEL 求值（#uid/#tenant/#roles/#target/#action）
+      AbacMethodSecurityExpressionHandler 方法级安全表达式处理器
     ldap/
-      LdapConfig               LdapContextSource + 运行时重配
+      LdapConfig               LdapTemplate 工厂（按租户缓存）
+    sms/
+      SmsSender / StubSmsSender / AliyunSmsSender
+    magiclink/
+      MagicSender / StubMagicSender / SmtpMagicSender
+    tenant/
+      CurrentTenantHolder / TenantAwareConnectionProvider / SchemaRoutingDataSource
+      CurrentTenantIdentifierResolverImpl / MultiTenancyConfig
   start/
     IamApplication             统一启动类（测试 + 默认双 profile）
     DemoSeeder                 启动播种
@@ -251,6 +268,8 @@ frontend/
           TenantsPane.vue    租户 CRUD（含 LDAP 配置）
           AuditPane.vue      审计日志（哈希链）
           ConfigPane.vue     系统配置总览
+    components/
+      CallbackView.vue       通用回调"加载中"卡片（被 3 个回调视图复用）
     router/index.ts          路由 + admin 守卫
 ```
 
@@ -287,13 +306,17 @@ frontend/
 
 ## 升级路径（ponytail 简化点）
 
-- HS256 → RS256 + 真 JWKS：多资源服务器独立验签时切换
-- InMemoryRelyingPartyRegistrationRepository → JPA backed：多 IdP 动态注册
-- LDAP 单服务器 → 按租户多服务器：`TenantEntity.ldapUrl` 已建模，建 per-tenant LdapContextSource
-- Schema-per-tenant：Hibernate multi-tenant + `TenantInterceptor`
-- ABAC SpEL：`PermissionEntity.spelExpression` 已存，接 `MethodSecurityExpressionHandler`
+已实现：
+- ✅ RS256 + 真 JWKS（自动 RSA-2048，可按 PEM 固定）
+- ✅ ABAC SpEL（`@PreAuthorize("hasPermission(...)")`）
+- ✅ Schema-per-tenant（`iam.tenant.multi-tenant-enabled=true`）
+- ✅ 按租户多 LDAP（`TenantEntity.ldapUrl` + 运行时工厂）
+- ✅ 短信/Magic Link 可插拔（`SmsSender` / `MagicSender` 接口）
+- ✅ 支付宝 SDK（RSA2 签名，反射加载）
+- ✅ JPA SAML IdP 注册（多租户多 IdP）
+
+待接入：
 - WebAuthn：接入 `spring-security-webauthn`（Spring Boot 2.7 不内置）
 - Kerberos：JAAS krb5 登录配置 + `org.ietf.jgss` 解 SPNEGO token
 - SCIM：接 `scim2-sdk` 实现 `/scim/v2/Users` 全 CRUD
-- 短信/Magic Link sender：替换 `SmsCodeService.send` / `MagicLinkService.send` 中的 console stub
-- 社交登录 Alipay：接 `alipay-sdk-java` 做 RSA2 签名
+- 社交登录 Alipay：生产环境建议显式引入 `alipay-sdk-java` 依赖（当前反射加载）

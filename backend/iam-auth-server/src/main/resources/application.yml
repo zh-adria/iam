@@ -27,11 +27,17 @@ spring:
     timeout: 3000ms
 iam:
   jwt:
-    # ponytail: HS256 for demo single-instance. Switch to RS256 + key pair when multiple resource servers verify tokens.
-    secret: ${IAM_JWT_SECRET:CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256}
+    # RS256 (RSA keypair). Auto-generates a 2048-bit key on startup; configure these
+    # to pin a keypair across restarts (PEM-encoded):
+    #   iam.jwt.rsa-private-key-pem=...
+    #   iam.jwt.rsa-public-key-pem=...
     issuer: iam-platform
     access-ttl-minutes: 30
     refresh-ttl-days: 7
+  tenant:
+    # Enable SCHEMA-per-tenant isolation (Hibernate multi-tenant routing). When false (default)
+    # all tenants share the public schema — backwards compatible.
+    multi-tenant-enabled: false
   password:
     bcrypt-strength: 10
     max-fail-count: 5
@@ -62,26 +68,37 @@ iam:
     manager-dn:
     manager-password:
   sms:
-    # ponytail: stub sender — logs code to console. Wire Aliyun/Tencent SMS SDK here for prod.
+    # provider: stub | aliyun (tencent stub: implement SmsSender interface)
     provider: stub
     code-ttl-seconds: 300
     code-length: 6
+    # Aliyun Dysmsapi 2017-05-25 config (provider=aliyun)
     aliyun-access-key:
     aliyun-secret:
     aliyun-sign-name:
     aliyun-template-code:
+    aliyun-endpoint: dysmsapi.aliyuncs.com
   magic-link:
-    # ponytail: email sender stub — logs link to console. Wire SMTP/SES for prod.
+    # provider: stub | smtp, base-url used in the link sent
+    provider: stub
     base-url: http://localhost:5173/magic-callback
     ttl-minutes: 15
+    # SMTP config (provider=smtp)
+    smtp-host: smtp.example.com
+    smtp-port: 587
+    smtp-username:
+    smtp-password:
+    smtp-from: noreply@example.com
+    smtp-starttls: true
   social:
-    # ponytail: fill appId/appSecret per provider to enable. Callback URL = /iam/api/auth/social/{provider}/callback
+    # Facebook: fill appId/appSecret per provider to enable. Callback URL = /iam/api/auth/social/{provider}/callback
     wechat:
       app-id:
       app-secret:
     alipay:
       app-id:
       app-private-key:
+      alipay-public-key:   # RSA2 public key (for verifying Alipay response)
     qq:
       app-id:
       app-key:

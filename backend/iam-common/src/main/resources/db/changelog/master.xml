@@ -126,4 +126,22 @@
         <addUniqueConstraint tableName="iam_social_binding" columnNames="provider,provider_user_id"/>
         <createIndex indexName="idx_sb_user" tableName="iam_social_binding"><column name="user_id" type="bigint"/></createIndex>
     </changeSet>
+
+    <changeSet id="002-create-saml-idp-registration" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="iam_saml_idp_registration"/></not></preConditions>
+        <createTable tableName="iam_saml_idp_registration">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="registration_id" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="idp_entity_id" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="idp_sso_url" type="varchar(255)"/>
+            <column name="idp_metadata_url" type="varchar(255)"/>
+            <column name="idp_metadata_xml" type="text"/>
+            <column name="sp_entity_id" type="varchar(255)"/>
+            <column name="acs_template" type="varchar(255)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="iam_saml_idp_registration" columnNames="tenant_code,registration_id"/>
+        <createIndex indexName="idx_saml_tenant" tableName="iam_saml_idp_registration"><column name="tenant_code" type="varchar(32)"/></createIndex>
+    </changeSet>
 </databaseChangeLog>

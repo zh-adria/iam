@@ -1,5 +1,6 @@
 package com.iam.infrastructure.security;
 
+import com.iam.infrastructure.tenant.CurrentTenantHolder;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,10 +30,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
-        String auth = req.getHeader("Authorization");
-        if (auth != null && auth.startsWith("Bearer ")) {
-            String token = auth.substring(7);
-            try {
+        try {
+            String auth = req.getHeader("Authorization");
+            if (auth != null && auth.startsWith("Bearer ")) {
+                String token = auth.substring(7);
                 Claims c = jwt.parse(token);
                 String jti = (String) c.get("jti");
                 if (jti != null && !cache.isAccessValid(jti)) {
@@ -45,11 +46,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                             c.get("tenant", String.class), c.get("roles", List.class));
                     var sat = new UsernamePasswordAuthenticationToken(principal, null, auths);
                     SecurityContextHolder.getContext().setAuthentication(sat);
+                    CurrentTenantHolder.set(c.get("tenant", String.class));
                 }
-            } catch (Exception e) {
-                log.debug("invalid jwt: {}", e.getMessage());
             }
+            chain.doFilter(req, res);
+        } catch (Exception e) {
+            log.debug("invalid jwt: {}", e.getMessage());
+            chain.doFilter(req, res);
+        } finally {
+            CurrentTenantHolder.clear();
         }
-        chain.doFilter(req, res);
     }
 }

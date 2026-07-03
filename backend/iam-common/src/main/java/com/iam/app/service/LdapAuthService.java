@@ -3,9 +3,11 @@ package com.iam.app.service;
 import com.iam.app.dto.TokenResponse;
 import com.iam.domain.AuthException;
 import com.iam.infrastructure.entity.SocialBindingEntity;
+import com.iam.infrastructure.entity.TenantEntity;
 import com.iam.infrastructure.entity.UserEntity;
 import com.iam.infrastructure.ldap.LdapConfig;
 import com.iam.infrastructure.repository.SocialBindingRepository;
+import com.iam.infrastructure.repository.TenantRepository;
 import com.iam.infrastructure.repository.UserRepository;
 import com.iam.infrastructure.security.AuditLogService;
 import com.iam.infrastructure.security.JwtTokenService;
@@ -17,12 +19,13 @@ import org.springframework.ldap.core.LdapTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.naming.directory.Attributes;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * LDAP/AD authentication + user provisioning.
- * On successful bind: find-or-create local user linked via SocialBindingEntity(provider='ldap').
+ * Per-tenant: looks up TenantEntity.ldapUrl / ldapBase; falls back to system default.
  */
 @Slf4j
 @Service
@@ -32,18 +35,39 @@ public class LdapAuthService {
     private final LdapConfig ldap;
     private final UserRepository userRepo;
     private final SocialBindingRepository socialRepo;
+    private final TenantRepository tenantRepo;
     private final JwtTokenService jwt;
     private final AuditLogService audit;
 
     @Transactional
     public TokenResponse authenticate(String username, String password, String tenantCode, String ip) {
-        if (!ldap.isEnabled()) throw new AuthException("LDAP_DISABLED", "LDAP 未配置");
-        LdapTemplate t = ldap.template();
-        String dn = ldap.userDnPattern().replace("{0}", username);
+        // resolve per-tenant LDAP config — prefer tenant-specific ldapUrl, fall back to system default
+        String url = ldap.systemUrl();
+        String base = "";
+        String userDnPattern = ldap.systemUserDnPattern();
+
+        if (tenantCode != null && !"default".equals(tenantCode)) {
+            TenantEntity tenant = tenantRepo.findByCode(tenantCode).orElse(null);
+            if (tenant != null && tenant.getLdapUrl() != null && !tenant.getLdapUrl().isEmpty()) {
+                url = tenant.getLdapUrl();
+                base = tenant.getLdapBase() == null ? "" : tenant.getLdapBase();
+                userDnPattern = ldap.userDnPatternFor(url);
+                log.debug("Using per-tenant LDAP for {}: url={}", tenantCode, url);
+            }
+        }
+        if (url == null || url.isEmpty()) {
+            base = ldap.baseFor(null);
+        }
+
+        if (url == null || url.isEmpty()) {
+            throw new AuthException("LDAP_DISABLED", "LDAP 未配置");
+        }
+
+        LdapTemplate t = ldap.templateFor(url, base);
+        String dn = userDnPattern.replace("{0}", username);
 
         boolean ok;
         try {
-            // ponytail: returns boolean (true=bind ok). Newer query-based overload throws on failure.
             ok = t.authenticate("", "(uid=" + username + ")", password);
         } catch (AuthenticationException e) {
             ok = false;
@@ -59,9 +83,9 @@ public class LdapAuthService {
         // fetch attributes for provisioning
         String email = null, displayName = username;
         try {
-            List<java.util.Map<String,String>> attrs = t.search(
-                    "", "(uid=" + username + ")", (AttributesMapper<java.util.Map<String,String>>) a -> {
-                        java.util.Map<String,String> m = new java.util.HashMap<>();
+            List<Map<String, String>> attrs = t.search(
+                    "", "(uid=" + username + ")", (AttributesMapper<Map<String, String>>) a -> {
+                        Map<String, String> m = new HashMap<>();
                         if (a.get("mail") != null) m.put("mail", a.get("mail").get().toString());
                         if (a.get("cn") != null) m.put("cn", a.get("cn").get().toString());
                         return m;

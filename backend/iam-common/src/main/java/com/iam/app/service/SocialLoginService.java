@@ -50,6 +50,7 @@ public class SocialLoginService {
     @Value("${iam.social.qq.app-key:}") private String qqKey;
     @Value("${iam.social.alipay.app-id:}") private String alipayId;
     @Value("${iam.social.alipay.app-private-key:}") private String alipayKey;
+    @Value("${iam.social.alipay.alipay-public-key:}") private String alipayPublicKey;
     @Value("${iam.social.wecom.corp-id:}") private String wecomCorpId;
     @Value("${iam.social.wecom.corp-secret:}") private String wecomSecret;
 
@@ -177,9 +178,50 @@ public class SocialLoginService {
                 p.put("name", "wecom_user");
                 return p;
             }
-            case "alipay":
-                // ponytail: Alipay requires RSA2 signing — out of scope for stub. Returns synthesized openid.
-                throw new AuthException("SOCIAL_NOT_IMPLEMENTED", "alipay 需 RSA2 签名，配置 alipay-sdk 后补实现");
+            case "alipay": {
+                if (alipayId.isEmpty()) throw new AuthException("SOCIAL_NOT_CONFIGURED", "alipay 未配置");
+                // Alipay OAuth2: exchange authorization_code → access_token → user_id via
+                // alipay.system.oauth.token API signed with RSA2.
+                //
+                // Uses reflection to load Alipay SDK classes so the platform compiles without
+                // the alipay-sdk dependency at compile time; activate by setting
+                // iam.social.alipay.app-id / app-private-key / alipay-public-key.
+                try {
+                    Class<?> clientClass = Class.forName("com.alipay.api.DefaultAlipayClient");
+                    Object client = clientClass.getConstructor(String.class, String.class,
+                            String.class, String.class, String.class, String.class, String.class)
+                            .newInstance("https://openapi.alipay.com/gateway.do",
+                                    alipayId, alipayKey, "json", "UTF-8",
+                                    alipayPublicKey, "RSA2");
+                    Class<?> reqClass = Class.forName("com.alipay.api.request.AlipaySystemOAuthTokenRequest");
+                    Object req = reqClass.getDeclaredConstructor().newInstance();
+                    reqClass.getMethod("setGrantType", String.class).invoke(req, "authorization_code");
+                    reqClass.getMethod("setCode", String.class).invoke(req, code);
+                    Object resp = clientClass.getMethod("execute", Class.forName("com.alipay.api.AlipayRequest"))
+                            .invoke(client, req);
+                    boolean success = (Boolean) resp.getClass().getMethod("isSuccess").invoke(resp);
+                    if (success) {
+                        Object userId = resp.getClass().getMethod("getUserId").invoke(resp);
+                        if (userId != null) {
+                            Map<String, Object> p = new HashMap<>();
+                            p.put("openid", String.valueOf(userId));
+                            Object nickName = resp.getClass().getMethod("getNickName").invoke(resp);
+                            p.put("name", nickName == null ? "alipay_user" : nickName);
+                            return p;
+                        }
+                    }
+                    Object subMsg = null;
+                    try { subMsg = resp.getClass().getMethod("getSubMsg").invoke(resp); } catch (Exception ignored) {}
+                    throw new AuthException("SOCIAL_FAIL", "alipay token exchange failed: " + subMsg);
+                } catch (AuthException e) {
+                    throw e;
+                } catch (ClassNotFoundException e) {
+                    throw new AuthException("SOCIAL_NOT_CONFIGURED",
+                            "alipay SDK 不在 classpath，请确认 alipay-sdk-java 依赖已引入");
+                } catch (Exception e) {
+                    throw new AuthException("SOCIAL_FAIL", "alipay 调用失败: " + e.getMessage());
+                }
+            }
             default:
                 throw new AuthException("UNKNOWN_PROVIDER", "不支持的 provider: " + provider);
         }

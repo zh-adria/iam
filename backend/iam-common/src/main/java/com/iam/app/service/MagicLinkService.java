@@ -3,6 +3,7 @@ package com.iam.app.service;
 import com.iam.app.dto.TokenResponse;
 import com.iam.domain.AuthException;
 import com.iam.infrastructure.entity.UserEntity;
+import com.iam.infrastructure.magiclink.MagicSender;
 import com.iam.infrastructure.repository.UserRepository;
 import com.iam.infrastructure.security.AuditLogService;
 import com.iam.infrastructure.security.JwtTokenService;
@@ -19,7 +20,7 @@ import java.util.UUID;
 
 /**
  * Magic Link auth: email a one-time token, exchange for JWT.
- * ponytail: mailer is a stub (logs link). Wire JavaMail/SES in send() for prod.
+ * Sender is pluggable via MagicSender interface (stub / smtp).
  */
 @Slf4j
 @Service
@@ -30,6 +31,7 @@ public class MagicLinkService {
     private final JwtTokenService jwt;
     private final TokenCacheService cache;
     private final AuditLogService audit;
+    private final MagicSender magicSender;
 
     @Value("${iam.magic-link.base-url:http://localhost:5173/magic-callback}") private String baseUrl;
     @Value("${iam.magic-link.ttl-minutes:15}") private long ttlMin;
@@ -40,8 +42,7 @@ public class MagicLinkService {
         String token = UUID.randomUUID().toString().replace("-", "");
         cache.cacheMagicToken(token, u.getId(), Duration.ofMinutes(ttlMin));
         String link = baseUrl + "?token=" + token;
-        // ponytail: stub mailer — wire SMTP here.
-        log.info("[MAGIC-LINK-STUB] to {}: {} (ttl={}min)", email, link, ttlMin);
+        magicSender.send(email, link, (int) ttlMin);
         audit.record(u.getId(), u.getTenantCode(), "MAGIC_LINK_SEND", "SUCCESS", u.getUsername(), ip, email);
     }
 
