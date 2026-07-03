@@ -20,10 +20,16 @@
           placeholder="6 位动态码"
           @keyup.enter="submit"
           autocomplete="one-time-code"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          @input="code = ($event.target as HTMLInputElement).value.replace(/\D/g, '')"
         />
         <button type="submit" class="neo-btn primary" :disabled="loading">
           <span v-if="loading" class="btn-spinner" />
           <span v-else>验证</span>
+        </button>
+        <button type="button" class="neo-btn ghost" @click="router.push('/login')">
+          返回登录
         </button>
       </form>
     </div>

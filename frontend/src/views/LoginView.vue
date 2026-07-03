@@ -38,12 +38,14 @@
             <div class="input-group">
               <label class="input-label">用户名</label>
               <input v-model="form.username" class="neo-input" placeholder="输入用户名" />
+              <p v-if="!form.username && touched.username" class="field-error">请输入用户名</p>
             </div>
             <div class="input-group">
               <label class="input-label">密码</label>
               <input v-model="form.password" type="password" class="neo-input" placeholder="输入密码" />
+              <p v-if="!form.password && touched.password" class="field-error">请输入密码</p>
             </div>
-            <button type="submit" class="neo-btn primary" :disabled="loading" @click="onLogin">
+            <button type="submit" class="neo-btn primary" :disabled="loading">
               <span v-if="loading" class="btn-spinner" />
               <span v-else>登录</span>
             </button>
@@ -52,35 +54,42 @@
 
         <!-- SMS Login -->
         <div v-show="tab === 'sms'" class="tab-content animate-in-up">
-          <div class="input-group">
-            <label class="input-label">手机号</label>
-            <input v-model="smsForm.phone" class="neo-input" placeholder="输入手机号" />
-          </div>
-          <div class="input-group">
-            <label class="input-label">验证码</label>
-            <div class="input-row">
-              <input v-model="smsForm.code" class="neo-input" placeholder="6 位验证码" />
-              <button class="neo-btn ghost code-btn" :disabled="smsCountdown > 0" @click="onSmsSend">
-                {{ smsCountdown > 0 ? `${smsCountdown}s` : '发送' }}
-              </button>
+          <form @submit.prevent="onSmsLogin">
+            <div class="input-group">
+              <label class="input-label">手机号</label>
+              <input v-model="smsForm.phone" class="neo-input" placeholder="输入手机号" />
+              <p v-if="!smsForm.phone && touched.smsPhone" class="field-error">请输入手机号</p>
             </div>
-          </div>
-          <button class="neo-btn primary" :disabled="loading" @click="onSmsLogin">
-            <span v-if="loading" class="btn-spinner" />
-            <span v-else>登录</span>
-          </button>
+            <div class="input-group">
+              <label class="input-label">验证码</label>
+              <div class="input-row">
+                <input v-model="smsForm.code" class="neo-input" placeholder="6 位验证码" />
+                <button type="button" class="neo-btn ghost code-btn" :disabled="smsCountdown > 0" @click="onSmsSend">
+                  {{ smsCountdown > 0 ? `${smsCountdown}s` : '发送' }}
+                </button>
+              </div>
+              <p v-if="!smsForm.code && touched.smsCode" class="field-error">请输入验证码</p>
+            </div>
+            <button type="submit" class="neo-btn primary" :disabled="loading">
+              <span v-if="loading" class="btn-spinner" />
+              <span v-else>登录</span>
+            </button>
+          </form>
         </div>
 
         <!-- Magic Link -->
         <div v-show="tab === 'magic'" class="tab-content animate-in-up">
-          <div class="input-group">
-            <label class="input-label">邮箱</label>
-            <input v-model="magicEmail" class="neo-input" placeholder="you@example.com" />
-          </div>
-          <button class="neo-btn primary" :disabled="loading" @click="onMagicSend">
-            <span v-if="loading" class="btn-spinner" />
-            <span v-else>发送登录链接</span>
-          </button>
+          <form @submit.prevent="onMagicSend">
+            <div class="input-group">
+              <label class="input-label">邮箱</label>
+              <input v-model="magicEmail" class="neo-input" placeholder="you@example.com" />
+              <p v-if="!magicEmail && touched.magicEmail" class="field-error">请输入邮箱</p>
+            </div>
+            <button type="submit" class="neo-btn primary" :disabled="loading">
+              <span v-if="loading" class="btn-spinner" />
+              <span v-else>发送登录链接</span>
+            </button>
+          </form>
           <p class="tab-hint">链接发送到邮箱，在 stub 模式下会打印在后端控制台</p>
         </div>
 
@@ -138,6 +147,7 @@ const form = ref({ tenantCode: 'default', username: '', password: '' })
 const smsForm = ref({ phone: '', code: '' })
 const magicEmail = ref('')
 const smsCountdown = ref(0)
+const touched = ref<Record<string, boolean>>({})
 
 const tabs = [
   { key: 'password', label: '密码', icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' },
@@ -157,6 +167,8 @@ const socialProviders = [
 ]
 
 async function onLogin(): Promise<void> {
+  touched.value = { ...touched.value, username: true, password: true }
+  if (!form.value.username || !form.value.password) return
   loading.value = true
   try {
     const r = await api.login(form.value)
@@ -187,6 +199,8 @@ async function onSmsSend(): Promise<void> {
 }
 
 async function onSmsLogin(): Promise<void> {
+  touched.value = { ...touched.value, smsPhone: true, smsCode: true }
+  if (!smsForm.value.phone || !smsForm.value.code) return
   loading.value = true
   try {
     const r = await api.smsLogin(smsForm.value.phone, smsForm.value.code)
@@ -199,7 +213,8 @@ async function onSmsLogin(): Promise<void> {
 }
 
 async function onMagicSend(): Promise<void> {
-  if (!magicEmail.value) { ElMessage.warning('请输入邮箱'); return }
+  touched.value = { ...touched.value, magicEmail: true }
+  if (!magicEmail.value) return
   await api.magicSend(magicEmail.value)
   ElMessage.success('登录链接已发送到邮箱')
 }
@@ -328,6 +343,11 @@ function oauth2Authorize(): void {
 /* ── Inputs ── */
 .input-group {
   margin-bottom: 18px;
+}
+.field-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  margin-top: 4px;
 }
 .input-label {
   display: block;

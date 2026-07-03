@@ -1,6 +1,6 @@
 # IAM 统一身份认证与授权平台
 
-基于 **Alibaba Cola 4.0 四层架构**（适配器 / 应用 / 领域 / 基础设施）+ Spring Boot 2.7 + Spring Security + OAuth2 + JPA 构建的保险中台 IAM。
+基于 **Alibaba Cola 4.0 四层架构**（适配器 / 应用 / 领域 / 基础设施）+ Spring Boot 2.7 + Spring Security + OAuth2 + JPA 构建的统一身份认证与授权平台。
 
 ## 快速开始
 

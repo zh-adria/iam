@@ -142,7 +142,10 @@ onMounted(() => {
   ;(async () => {
     try {
       profile.value = await api.me()
-    } catch { /* token may expire during init */ }
+    } catch {
+      ElMessage.warning('会话已过期，请重新登录')
+      router.push('/login')
+    }
     const token = localStorage.getItem('access_token') || ''
     try {
       const payload = JSON.parse(atob(token.split('.')[1]))
@@ -155,8 +158,11 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 async function onCmd(cmd: string) {
   showMenu.value = false
   if (cmd === 'logout') {
-    await api.logout()
-    router.push('/login')
+    try {
+      await ElMessageBox.confirm('确认退出登录？', '提示', { confirmButtonText: '退出', cancelButtonText: '取消', type: 'info' })
+      await api.logout()
+      router.push('/login')
+    } catch { /* cancelled */ }
   } else if (cmd === 'setupMfa') {
     const r = await api.setupMfa()
     mfaDialog.value = { visible: true, uri: r.otpauth, code: '' }

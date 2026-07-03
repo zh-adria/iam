@@ -2,7 +2,7 @@
 -- admin/Iam@2026  user/User@2026
 INSERT INTO iam_tenant (code, name, isolation_mode, schema_name, enabled) VALUES
   ('default', '默认租户', 'SHARED', NULL, TRUE),
-  ('acme',    'ACME保险', 'SHARED', NULL, TRUE);
+  ('acme',    'ACME集团', 'SHARED', NULL, TRUE);
 
 INSERT INTO iam_role (code, name, tenant_code) VALUES
   ('ROLE_ADMIN', '管理员', 'default'),
