@@ -33,8 +33,7 @@ management:
 
 iam:
   jwt:
-    # ponytail: must match auth-server's IAM_JWT_SECRET so admin can verify tokens issued by auth-server.
-    secret: ${IAM_JWT_SECRET:CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256}
+    # RS256 — admin verifies tokens using the same auto-generated RSA keypair as auth-server.
     issuer: iam-platform
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000

@@ -21,7 +21,6 @@ spring:
 
 iam:
   jwt:
-    secret: test_secret_at_least_32_bytes_long_for_HS256_test_only
     issuer: iam-platform-test
     access-ttl-minutes: 30
     refresh-ttl-days: 7
@@ -36,9 +35,7 @@ iam:
   ratelimit:
     login-per-minute: 10
   tenant:
-    default: default
-  audit:
-    tamper-proof: true
+    multi-tenant-enabled: false
   cors:
     allowed-origins: http://localhost:5173
   saml:
@@ -61,27 +58,18 @@ iam:
     code-ttl-seconds: 300
     code-length: 6
   magic-link:
+    provider: stub
     base-url: http://localhost:5173/magic-callback
     ttl-minutes: 15
   social:
     wechat: { app-id: , app-secret: }
-    alipay: { app-id: , app-private-key: }
+    alipay: { app-id: , app-private-key: , alipay-public-key: }
     qq: { app-id: , app-key: }
     dingtalk: { app-id: , app-secret: }
     wecom: { corp-id: , agent-id: , corp-secret: }
   cas:
     server-url:
     service-url: http://localhost:8080/iam/api/auth/cas/callback
-  webauthn:
-    enabled: false
-    rp-id: localhost
-    rp-name: IAM-Test
-    origin: http://localhost:5173
-  scim:
-    enabled: false
-  kerberos:
-    enabled: false
-    realm:
 
 logging:
   level:

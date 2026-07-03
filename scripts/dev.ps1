@@ -1,21 +1,84 @@
-﻿# ponytail: PowerShell counterpart of dev.sh. Run via:
-#   powershell -ExecutionPolicy Bypass -File scripts\dev.ps1
-# or after `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, just:
-#   .\scripts\dev.ps1
+# IAM full-stack dev starter (Windows PowerShell).
+# Run via:  powershell -ExecutionPolicy Bypass -File scripts\dev.ps1
+# or after `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once:  .\scripts\dev.ps1
 #
+# Auto-detects JDK 17 and Maven from PATH; falls back to sensible Windows defaults.
 # Redis provisioning order:
 #   1) docker compose (if docker available & running)
 #   2) local redis on localhost:6379 (if redis-cli ping works)
-#   3) auto-download portable Windows Redis into scripts\redis\ and start it
-# This means dev.bat works on a clean Windows machine with no docker, no redis install.
+#   3) auto-download portable Windows Redis into scripts\redis\
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
-# ponytail: force JDK 17 — user's system JAVA_HOME may point to JDK 8 which fails
-# the --release 17 flag in pom.xml. Edit this path if your JDK 17 lives elsewhere.
-$env:JAVA_HOME = 'D:\Program Files (x86)\jdk17'
-$env:PATH = "$env:JAVA_HOME\bin;D:\Program Files (x86)\apache-maven-3.9.7\bin;$env:PATH"
+# --- auto-detect JDK 17+ ---
+function Find-JavaHome {
+  # honor env override
+  if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe")) { return $env:JAVA_HOME }
+  # try registry
+  foreach (@('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
+    try {
+      $ver = (Get-ItemProperty $via ErrorAction SilentlyContinue).CurrentVersion
+      if ($ver) {
+        $home = (Get-ItemProperty "$via\$ver" -ErrorAction SilentlyContinue).JavaHome
+        if ($home -and (Test-Path "$home\bin\java.exe")) { return $home }
+      }
+    } catch {}
+  }
+  # fallback: search common locations
+  foreach ($p in @('C:\Program Files\Java','C:\Program Files (x86)\Java','D:\Program Files\Java')) {
+    if (Test-Path $p) {
+      $dirs = Get-ChildItem $p -Directory | Where-Object { $_.Name -match '^jdk-?(17|21|22)' } |
+              Sort-Object Name -Descending | Select-Object -First 1
+      if ($dirs -and (Test-Path "$($dirs.FullName)\bin\java.exe")) { return $dirs.FullName }
+    }
+  }
+  # last resort: java on PATH, derive JAVA_HOME from it
+  try {
+    $jPath = (Get-Command java -ErrorAction SilentlyContinue).Source
+    if ($jPath) {
+      $resolved = (Get-Item $jPath -ErrorAction SilentlyContinue).Target
+      if ($resolved -and (Test-Path $resolved)) {
+        $jDir = Split-Path (Split-Path $resolved -Parent) -Parent
+        if ($jDir -and (Test-Path "$jDir\bin\javac.exe")) { return $jDir }
+      }
+    }
+  } catch {}
+  return $null
+}
+$javaHome = Find-JavaHome
+if (-not $javaHome -or -not (Test-Path "$javaHome\bin\javac.exe")) {
+  Write-Host "ERROR: JDK 17+ not found. Install JDK 17/21/22 or set JAVA_HOME."
+  Write-Host "Searched: C:\Program Files\Java, registry, PATH"
+  exit 1
+}
+$env:JAVA_HOME = $javaHome
+Write-Host "      using JDK at $javaHome"
+
+# --- auto-detect Maven ---
+function Find-MavenDir {
+  if ($env:M2_HOME -and (Test-Path "$env:M2_HOME\bin\mvn.cmd")) { return $env:M2_HOME }
+  try {
+    $mvnPath = (Get-Command mvn -ErrorAction SilentlyContinue).Source
+    if ($mvnPath) { return Split-Path (Split-Path $mvnPath -Parent) -Parent }
+  } catch {}
+  foreach ($p in @('C:\Program Files\apache-maven','C:\Program Files (x86)\apache-maven',
+                    'D:\Program Files\apache-maven','D:\Program Files (x86)\apache-maven')) {
+    if (Test-Path $p) {
+      $dirs = (Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+      if ($dirs) { return $dirs[0].FullName }
+    }
+  }
+  return $null
+}
+$mavenHome = Find-MavenDir
+if (-not $mavenHome -or -not (Test-Path "$mavenHome\bin\mvn.cmd")) {
+  Write-Host "ERROR: Maven not found. Install Maven or set M2_HOME."
+  exit 1
+}
+$env:M2_HOME = $mavenHome
+$env:PATH = "$env:JAVA_HOME\bin;$env:M2_HOME\bin;$env:PATH"
+Write-Host "      using Maven at $mavenHome"
 
 $script:redisProc = $null
 $script:redisFromDocker = $false
@@ -43,26 +106,18 @@ function Test-RedisUp {
 }
 
 function Ensure-Redis {
-  # 1) docker
   $dockerOk = $false
   try { if (Get-Command docker -ErrorAction SilentlyContinue) { docker info 2>$null | Out-Null; $dockerOk = $LASTEXITCODE -eq 0 } } catch {}
   if ($dockerOk) {
     Write-Host "      docker available — starting redis container"
-    docker compose up -d redis
+    docker compose up -d redis 2>&1 | Out-Null
     if (Wait-Until { (docker exec iam-redis redis-cli ping 2>$null) -match 'PONG' } 15) {
       $script:redisFromDocker = $true
       return
     }
     Write-Host "      docker redis didn't come up, falling back"
   }
-
-  # 2) local redis already listening
-  if (Test-RedisUp) {
-    Write-Host "      using local redis on localhost:6379"
-    return
-  }
-
-  # 3) auto-provision portable redis
+  if (Test-RedisUp) { Write-Host "      using local redis on localhost:6379"; return }
   $redisDir = Join-Path $root 'scripts\redis'
   $redisExe = Join-Path $redisDir 'redis-server.exe'
   if (-not (Test-Path $redisExe)) {
@@ -74,7 +129,6 @@ function Ensure-Redis {
     Expand-Archive -Path $zip -DestinationPath $redisDir -Force
     Remove-Item $zip -Force
     if (-not (Test-Path $redisExe)) {
-      # zip may extract into a subfolder; find redis-server.exe
       $found = Get-ChildItem -Path $redisDir -Recurse -Filter 'redis-server.exe' | Select-Object -First 1
       if ($found) { Move-Item $found.FullName (Join-Path $redisDir 'redis-server.exe') -Force }
     }
@@ -107,7 +161,7 @@ Pop-Location
 
 New-Item -ItemType Directory -Force -Path logs | Out-Null
 
-Write-Host "[3/4] starting iam-auth-server (8080) - H2 dev profile"
+Write-Host "[3/4] starting iam-auth-server (8080) - dev profile"
 $auth = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
   -ArgumentList '-jar','backend\iam-auth-server\target\iam-auth-server-1.0.0-SNAPSHOT.jar','--spring.profiles.active=dev' `
   -RedirectStandardOutput 'logs\auth-server.log' `
@@ -116,9 +170,6 @@ $auth = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
 Write-Host "  auth-server pid=$($auth.Id)  log=logs\auth-server.log"
 
 Write-Host "      waiting for auth-server health..."
-# ponytail: check StatusCode==200, not .Content -match 'UP'. PS 5.x returns
-# .Content as a byte array when Content-Type is application/vnd.spring-boot.actuator.v3+json,
-# so the -match never finds the string. 200 => UP, 503 => DOWN, throw => not ready.
 if (-not (Wait-Until {
   try { (Invoke-WebRequest -UseBasicParsing 'http://localhost:8080/iam/actuator/health' -TimeoutSec 2).StatusCode -eq 200 }
   catch { $false }
@@ -126,7 +177,7 @@ if (-not (Wait-Until {
   Write-Host "ERROR: auth-server didn't become healthy in 90s. Check logs\auth-server.log"
 }
 
-Write-Host "      starting iam-admin (8081) - shares H2 file, liquibase disabled"
+Write-Host "      starting iam-admin (8081)"
 $admin = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
   -ArgumentList '-jar','backend\iam-admin\target\iam-admin-1.0.0-SNAPSHOT.jar','--spring.profiles.active=dev' `
   -RedirectStandardOutput 'logs\admin.log' `
@@ -141,15 +192,15 @@ $front = Start-Process -FilePath 'npm.cmd' -ArgumentList 'run','dev' -PassThru -
 Pop-Location
 
 Write-Host ""
-Write-Host "IAM 平台已启动 (dev mode, H2):"
-Write-Host "  前端:        http://localhost:5173"
-Write-Host "  Auth Server: http://localhost:8080/iam"
+Write-Host "IAM 平台已启动 (dev profile, RS256 JWK, H2):"
+Write-Host "  前端:         http://localhost:5173"
+Write-Host "  Auth Server:  http://localhost:8080/iam"
 Write-Host "  Admin Server: http://localhost:8081/iam"
-Write-Host "  H2 JDBC URL: jdbc:h2:file:$env:USERPROFILE\iam-dev\iam;AUTO_SERVER=TRUE;MODE=MySQL"
-Write-Host "  Redis:       localhost:6379"
-Write-Host "  演示账号:    admin / Iam@2026,  alice / User@2026"
-Write-Host "  OAuth2:      demo-client / demo-secret"
-Write-Host "  H2 数据文件: $env:USERPROFILE\iam-dev\iam.*  (删除即重置)"
+Write-Host "  H2 JDBC URL:  jdbc:h2:file:$env:USERPROFILE\iam-dev\iam;AUTO_SERVER=TRUE;MODE=MySQL"
+Write-Host "  Redis:        localhost:6379"
+Write-Host "  演示账号:     admin / Iam@2026,  alice / User@2026"
+Write-Host "  OAuth2:       demo-client / demo-secret"
+Write-Host "  SAML:         admin 后台动态注册,  POST /admin/api/saml/idps"
 Write-Host "  Ctrl-C 停止所有服务"
 Write-Host ""
 

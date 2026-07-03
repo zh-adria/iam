@@ -1,11 +1,53 @@
-﻿# ponytail: only backend services on H2 dev profile. Auto-provisions Redis.
+﻿# Backend-only dev starter (Windows). Auto-detects JDK 17+ and Maven.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
-# ponytail: force JDK 17 — user's system JAVA_HOME may point to JDK 8.
-$env:JAVA_HOME = 'D:\Program Files (x86)\jdk17'
-$env:PATH = "$env:JAVA_HOME\bin;D:\Program Files (x86)\apache-maven-3.9.7\bin;$env:PATH"
+function Find-JavaHome {
+  if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe")) { return $env:JAVA_HOME }
+  foreach (@('HKLM:\SOFTWARE\JavaSoft\JDK','HKLM:\SOFTWARE\JavaSoft\Java Development Kit')) {
+    try {
+      $ver = (Get-ItemProperty $_ -ErrorAction SilentlyContinue).CurrentVersion
+      if ($ver) {
+        $home = (Get-ItemProperty "$_\$ver" -ErrorAction SilentlyContinue).JavaHome
+        if ($home -and (Test-Path "$home\bin\java.exe")) { return $home }
+      }
+    } catch {}
+  }
+  foreach ($p in @('C:\Program Files\Java','C:\Program Files (x86)\Java','D:\Program Files\Java')) {
+    if (Test-Path $p) {
+      $dirs = Get-ChildItem $p -Directory | Where-Object { $_.Name -match '^jdk-?(17|21|22)' } |
+              Sort-Object Name -Descending | Select-Object -First 1
+      if ($dirs -and (Test-Path "$($dirs.FullName)\bin\java.exe")) { return $dirs.FullName }
+    }
+  }
+  return $null
+}
+function Find-MavenDir {
+  if ($env:M2_HOME -and (Test-Path "$env:M2_HOME\bin\mvn.cmd")) { return $env:M2_HOME }
+  try {
+    $mvnPath = (Get-Command mvn -ErrorAction SilentlyContinue).Source
+    if ($mvnPath) { return Split-Path (Split-Path $mvnPath -Parent) -Parent }
+  } catch {}
+  foreach ($p in @('C:\Program Files\apache-maven','C:\Program Files (x86)\apache-maven')) {
+    if (Test-Path $p) {
+      $dirs = (Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+      if ($dirs) { return $dirs[0].FullName }
+    }
+  }
+  return $null
+}
+$javaHome = Find-JavaHome
+if (-not $javaHome -or -not (Test-Path "$javaHome\bin\javac.exe")) {
+  Write-Host "ERROR: JDK 17+ not found. Install or set JAVA_HOME."; exit 1
+}
+$env:JAVA_HOME = $javaHome
+$mavenHome = Find-MavenDir
+if (-not $mavenHome -or -not (Test-Path "$mavenHome\bin\mvn.cmd")) {
+  Write-Host "ERROR: Maven not found. Install or set M2_HOME."; exit 1
+}
+$env:M2_HOME = $mavenHome
+$env:PATH = "$env:JAVA_HOME\bin;$env:M2_HOME\bin;$env:PATH"
 
 $script:redisProc = $null
 $script:redisFromDocker = $false
@@ -68,6 +110,8 @@ function Ensure-Redis {
   if (-not (Wait-Until { Test-RedisUp } 15)) { throw "redis didn't come up on 6379" }
 }
 
+Write-Host "      using JDK at $javaHome"
+Write-Host "      using Maven at $mavenHome"
 Write-Host "redis check..."
 Ensure-Redis
 
@@ -78,7 +122,7 @@ Pop-Location
 
 New-Item -ItemType Directory -Force -Path logs | Out-Null
 
-Write-Host "starting iam-auth-server (8080) in background..."
+Write-Host "starting iam-auth-server (8080) - dev profile (RS256)"
 $auth = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
   -ArgumentList '-jar','backend\iam-auth-server\target\iam-auth-server-1.0.0-SNAPSHOT.jar','--spring.profiles.active=dev' `
   -RedirectStandardOutput 'logs\auth-server.log' `
