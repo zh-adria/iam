@@ -4,6 +4,7 @@ import com.iam.app.dto.ApiResult;
 import com.iam.app.service.OAuth2AuthService;
 import com.iam.domain.AuthException;
 import com.iam.infrastructure.security.IamPrincipal;
+import com.iam.infrastructure.security.JwtTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,6 +23,7 @@ import java.util.Map;
 public class OAuth2Controller {
 
     private final OAuth2AuthService oauth;
+    private final JwtTokenService jwt;
 
     /**
      * GET /oauth/authorize?response_type=code&client_id=...&redirect_uri=...&scope=...&state=...
@@ -135,17 +138,16 @@ public class OAuth2Controller {
         m.put("grant_types_supported",
                 new String[]{"authorization_code","refresh_token","password","client_credentials"});
         m.put("subject_types_supported", new String[]{"public"});
-        m.put("id_token_signing_alg_values_supported", new String[]{"HS256"});
+        m.put("id_token_signing_alg_values_supported", new String[]{"RS256"});
         m.put("code_challenge_methods_supported", new String[]{"S256"});
         m.put("scopes_supported", new String[]{"openid","profile","email","phone"});
         return m;
     }
 
+    /** RFC 7517 JWKS — returns the RSA public key(s) for RS256 verification by resource servers. */
     @GetMapping("/jwks")
     public Map<String, Object> jwks() {
-        // ponytail: HS256 symmetric — no public key to publish. Clients use shared secret.
-        Map<String, Object> m = new HashMap<>();
-        m.put("keys", new Object[0]);
-        return m;
+        return Map.of("keys", List.of(jwt.jwk()));
     }
 }
+

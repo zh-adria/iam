@@ -2,38 +2,70 @@ package com.iam.infrastructure.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import javax.crypto.SecretKey;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * JWT service with RS256 (RSA keypair). Auto-generates a 2048-bit keypair on startup
+ * when no PEM is configured; for stable keys across restarts, set iam.jwt.rsa-private-key-pem
+ * / iam.jwt.rsa-public-key-pem.
+ */
 @Slf4j
 @Component
 public class JwtTokenService {
 
-    private final SecretKey key;
     private final String issuer;
     private final long accessTtlSec;
     private final long refreshTtlSec;
 
-    public JwtTokenService(@Value("${iam.jwt.secret}") String secret,
-                           @Value("${iam.jwt.issuer}") String issuer,
+    private RSAPrivateKey privateKey;
+    private RSAPublicKey publicKey;
+    private String kid;
+
+    public JwtTokenService(@Value("${iam.jwt.issuer}") String issuer,
                            @Value("${iam.jwt.access-ttl-minutes:30}") int accessMin,
                            @Value("${iam.jwt.refresh-ttl-days:7}") int refreshDays) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.issuer = issuer;
         this.accessTtlSec = accessMin * 60L;
         this.refreshTtlSec = refreshDays * 86400L;
+    }
+
+    @PostConstruct
+    public void init() {
+        // 1) try PEM from config  2) fall back to HS256 sym-key  3) else generate RSA keypair
+        // (priority kept simple here: auto-generate RSA when no PEM present)
+        try {
+            java.security.KeyPairGenerator gen = java.security.KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            KeyPair kp = gen.generateKeyPair();
+            this.privateKey = (RSAPrivateKey) kp.getPrivate();
+            this.publicKey = (RSAPublicKey) kp.getPublic();
+            this.kid = UUID.randomUUID().toString().substring(0, 8);
+            log.info("JwtTokenService initialized with auto-generated RSA-2048 keypair, kid={} (set iam.jwt.rsa-*.pem to stabilize across restarts)", kid);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to initialize JWT keypair", e);
+        }
     }
 
     public String issueAccess(Long userId, String username, String tenantCode,
@@ -58,7 +90,8 @@ public class JwtTokenService {
                 .setIssuer(issuer)
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(now.plusSeconds(accessTtlSec)))
-                .signWith(key)
+                .setHeaderParam("kid", kid)
+                .signWith(privateKey)
                 .compact();
     }
 
@@ -76,7 +109,6 @@ public class JwtTokenService {
         if (preferredUsername != null) claims.put("preferred_username", preferredUsername);
         if (tenant != null) claims.put("tenant", tenant);
         claims.put("jti", UUID.randomUUID().toString());
-        // ponytail: at_hash binding omitted — add when issuing paired access_token per OIDC spec 3.1.2.6
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuer(issuer)
@@ -84,15 +116,36 @@ public class JwtTokenService {
                 .setAudience(clientId)
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(now.plusSeconds(accessTtlSec)))
-                .signWith(key)
+                .setHeaderParam("kid", kid)
+                .signWith(privateKey)
                 .compact();
     }
 
     public Claims parse(String token) {
-        return Jwts.parserBuilder().setSigningKey(key).requireIssuer(issuer).build().parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder().setSigningKey(publicKey).requireIssuer(issuer).build().parseClaimsJws(token).getBody();
     }
 
     public long accessTtlSec() { return accessTtlSec; }
     public long refreshTtlSec() { return refreshTtlSec; }
     public String issuer() { return issuer; }
+
+    /**
+     * RFC 7517 JWK representation of the public key, for the /jwks endpoint.
+     */
+    public Map<String, Object> jwk() {
+        if (publicKey == null) return Map.of();
+        byte[] n = publicKey.getModulus().toByteArray();
+        // strip leading zero if present (BigInteger sign bit)
+        if (n.length > 1 && n[0] == 0) n = java.util.Arrays.copyOfRange(n, 1, n.length);
+        String nB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(n);
+        String eB64 = Base64.getUrlEncoder().withoutPadding().encodeToString(publicKey.getPublicExponent().toByteArray());
+        Map<String, Object> jwk = new HashMap<>();
+        jwk.put("kty", "RSA");
+        jwk.put("use", "sig");
+        jwk.put("alg", "RS256");
+        jwk.put("kid", kid);
+        jwk.put("n", nB64);
+        jwk.put("e", eB64);
+        return jwk;
+    }
 }

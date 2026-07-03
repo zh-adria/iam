@@ -1,5 +1,6 @@
 package com.iam.start.config;
 
+import com.iam.infrastructure.security.AbacMethodSecurityExpressionHandler;
 import com.iam.infrastructure.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -79,6 +80,13 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
         return cfg.getAuthenticationManager();
+    }
+
+    /** Expose our custom MethodSecurityExpressionHandler so @PreAuthorize("hasPermission()") resolves SpEL. */
+    @Bean
+    public org.springframework.security.access.expression.method.MethodSecurityExpressionHandler methodSecurityExpressionHandler(
+            AbacMethodSecurityExpressionHandler abacExpressionHandler) {
+        return abacExpressionHandler;
     }
 
     private CorsConfigurationSource corsSource() {
