@@ -80,8 +80,7 @@ $env:M2_HOME = $mavenHome
 $env:PATH = "$env:JAVA_HOME\bin;$env:M2_HOME\bin;$env:PATH"
 Write-Host "      using Maven at $mavenHome"
 
-$script:redisProc = $null
-$script:redisFromDocker = $false
+# user manages their own Redis — script doesn't start/stop it
 
 function Wait-Until($fn, $seconds) {
   for ($i=1; $i -le $seconds; $i++) {
@@ -106,54 +105,9 @@ function Test-RedisUp {
 }
 
 function Ensure-Redis {
-  $dockerOk = $false
-  try { if (Get-Command docker -ErrorAction SilentlyContinue) { docker info 2>$null | Out-Null; $dockerOk = $LASTEXITCODE -eq 0 } } catch {}
-  if ($dockerOk) {
-    Write-Host "      docker available — starting redis container"
-    docker compose up -d redis 2>&1 | Out-Null
-    if (Wait-Until { (docker exec iam-redis redis-cli ping 2>$null) -match 'PONG' } 15) {
-      $script:redisFromDocker = $true
-      return
-    }
-    Write-Host "      docker redis didn't come up, falling back"
-  }
+  # just use local redis on localhost:6379 — user manages their own Redis
   if (Test-RedisUp) { Write-Host "      using local redis on localhost:6379"; return }
-  $redisDir = Join-Path $root 'scripts\redis'
-  $redisExe = Join-Path $redisDir 'redis-server.exe'
-  if (-not (Test-Path $redisExe)) {
-    Write-Host "      no redis found — downloading portable Windows Redis (one-time, ~12MB)"
-    New-Item -ItemType Directory -Force -Path $redisDir | Out-Null
-    $zip = Join-Path $redisDir 'redis.zip'
-    $url = 'https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip'
-    # cleanup any stale partial download from a previous failed run
-    if (Test-Path $zip) {
-      Write-Host "      removing stale redis.zip from a previous failed download"
-      Remove-Item $zip -Force -ErrorAction SilentlyContinue
-    }
-    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
-    Expand-Archive -Path $zip -DestinationPath $redisDir -Force
-    Remove-Item $zip -Force
-    if (-not (Test-Path $redisExe)) {
-      $found = Get-ChildItem -Path $redisDir -Recurse -Filter 'redis-server.exe' | Select-Object -First 1
-      if ($found) { Move-Item $found.FullName (Join-Path $redisDir 'redis-server.exe') -Force }
-    }
-  }
-  if (-not (Test-Path $redisExe)) { throw "redis-server.exe not found after download" }
-  $dataDir = Join-Path $redisDir 'data'
-  New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-  Write-Host "      starting portable redis-server.exe on port 6379"
-  $script:redisProc = Start-Process -FilePath $redisExe `
-    -ArgumentList '--port','6379','--dir',$dataDir `
-    -RedirectStandardOutput 'logs\redis.log' `
-    -RedirectStandardError  'logs\redis.err.log' `
-    -WindowStyle Hidden -PassThru
-  Start-Sleep -Seconds 1
-  if ($script:redisProc.HasExited) {
-    Write-Host "ERROR: redis-server exited immediately. See logs\redis.err.log"
-    Get-Content 'logs\redis.err.log' -ErrorAction SilentlyContinue | Select-Object -First 10
-    throw "redis-server failed to start"
-  }
-  if (-not (Wait-Until { Test-RedisUp } 15)) { throw "portable redis didn't come up on 6379" }
+  throw "Redis not running on localhost:6379. Start your local Redis first."
 }
 
 Write-Host "[1/4] redis check"
@@ -216,8 +170,5 @@ try {
   foreach ($p in @($front, $auth, $admin)) {
     if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
   }
-  if ($script:redisProc -and -not $script:redisProc.HasExited) {
-    Stop-Process -Id $script:redisProc.Id -Force -ErrorAction SilentlyContinue
-  }
-  if ($script:redisFromDocker) { docker compose stop redis 2>$null }
+  Write-Host "  (local Redis left running)"
 }
