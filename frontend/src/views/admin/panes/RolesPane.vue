@@ -20,10 +20,10 @@
           <span v-if="!rolePerms[row.code]?.length" class="no-data">未关联</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" min-width="180" align="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openPerms(row)">权限管理</el-button>
-          <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-button size="small" plain type="primary" @click="openPerms(row)">权限管理</el-button>
+          <el-button size="small" plain type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

@@ -24,7 +24,10 @@ http.interceptors.request.use(cfg => {
 http.interceptors.response.use(
   r => r,
   err => {
-    if (err.response?.status === 401) {
+    // 401 → 清 token 跳登录。但只在非 /login 路径时跳，避免 login 失败时循环重定向。
+    if (err.response?.status === 401
+        && !location.pathname.startsWith('/login')
+        && !location.pathname.startsWith('/mfa')) {
       localStorage.removeItem('access_token')
       localStorage.removeItem('roles')
       location.href = '/login'
@@ -35,7 +38,9 @@ http.interceptors.response.use(
 
 export const api = {
   async login(payload: { username: string; password: string; tenantCode?: string }): Promise<LoginResp> {
-    const { data } = await http.post('/auth/login', { grantType: 'password', clientId: 'iam-self', ...payload })
+    // ponytail: 登录请求强制无 token，避免残留旧 token 导致 Spring Security 拒请求(401/403) 或走错 auth 路径。
+    const { data } = await http.post('/auth/login', { grantType: 'password', clientId: 'iam-self', ...payload },
+      { headers: { Authorization: '' } })
     return data.data
   },
   async verifyMfa(mfaToken: string, code: string): Promise<LoginResp> {

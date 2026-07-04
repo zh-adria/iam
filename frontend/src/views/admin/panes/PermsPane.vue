@@ -21,9 +21,9 @@
       <el-table-column prop="resource" label="资源" min-width="120" />
       <el-table-column prop="action" label="动作" width="100" />
       <el-table-column prop="spel" label="SpEL" min-width="140" show-overflow-tooltip />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" min-width="100" align="right">
         <template #default="{ row }">
-          <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-button size="small" plain type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

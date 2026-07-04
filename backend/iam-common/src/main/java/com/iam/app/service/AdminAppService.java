@@ -243,7 +243,12 @@ public class AdminAppService {
 
     @Transactional
     public void deleteTenant(String code) {
-        tenantRepo.findByCode(code).ifPresent(tenantRepo::delete);
+        TenantEntity t = tenantRepo.findByCode(code).orElseThrow();
+        long userCount = userRepo.countByTenantCode(code);
+        if (userCount > 0) {
+            throw new IllegalStateException("租户下仍有 " + userCount + " 个用户，请先删除或迁移用户");
+        }
+        tenantRepo.delete(t);
     }
 
     // ---------- oauth2 clients ----------

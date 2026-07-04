@@ -31,10 +31,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ApiResult.fail("VALIDATION", e.getMessage()));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResult<Void>> biz(IllegalStateException e) {
+        return ResponseEntity.badRequest().body(ApiResult.fail("BUSINESS", e.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResult<Void>> all(Exception e) {
         log.error("unhandled", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResult.fail("INTERNAL", "服务异常"));
+                .body(ApiResult.fail("INTERNAL", e.getMessage()));
     }
 }

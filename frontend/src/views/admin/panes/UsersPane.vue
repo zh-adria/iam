@@ -27,13 +27,13 @@
         </template>
       </el-table-column>
       <!-- 操作列：用 min-width 替代固定宽度，避免水平滚动时和滚动条重叠 -->
-      <el-table-column label="操作" min-width="340" fixed="right">
+      <el-table-column label="操作" min-width="340" align="right">
         <template #default="{ row }">
-          <el-button type="primary" size="small" plain @click="openAssignRoles(row)">角色分配</el-button>
+          <el-button size="small" plain type="primary" @click="openAssignRoles(row)">角色分配</el-button>
           <el-button size="small" plain @click="onReset(row)">重置密码</el-button>
           <el-button size="small" plain @click="onToggle(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
           <el-button size="small" plain :disabled="row.status !== 2" @click="onUnlock(row)">解锁</el-button>
-          <el-button type="danger" size="small" plain @click="onDelete(row)">删除</el-button>
+          <el-button size="small" plain type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -163,8 +163,8 @@ async function saveRoles(): Promise<void> {
 
 async function onReset(row: UserRow): Promise<void> {
   const { value } = await ElMessageBox.prompt('新密码', '重置密码', { inputType: 'password' })
-  await adminApi.resetPassword(row.id, value)
   if (!value) return
+  await adminApi.resetPassword(row.id, value)
 }
 
 async function onToggle(row: UserRow): Promise<void> {

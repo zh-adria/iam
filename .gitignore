@@ -12,6 +12,7 @@ logs_dev_run.txt
 
 # Auto-provisioned portable Redis (downloaded by dev.ps1 on first run)
 scripts/redis/
+scripts/.secrets/
 
 # H2 dev database (~/iam-dev/iam.*)
 iam-dev/

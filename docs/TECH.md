@@ -100,14 +100,14 @@ iam/
 
 ## 5. JWT 设计
 
-- 算法：HS256（单实例够用；多资源服务器共享密钥即可）。
-- Header：`{alg: HS256, typ: JWT, kid: "iam-hs256"}`。
+- 算法：RS256（RSA-2048 keypair，确定性派生 — 两服务共享同一密钥对，无需额外配置）。
+- Header：`{alg: RS256, typ: JWT, kid: <deterministic-uuid-derived-from-issuer>}`。
 - Payload：`sub`（userId）、`preferred_username`、`email`、`tid`（tenant）、`roles`（数组）、`cid`（clientId，机机令牌时）、`iat`、`exp`、`iss=iam-platform`、`jti`。
 - access TTL 30 分钟，refresh TTL 7 天。
 - 撤销：access 通过 `TokenCacheService.isAccessRevoked(jti)` 检查黑名单；refresh 通过 `refresh_tokens.revoked` 列。
-- ID Token（OIDC）：`issueIdToken(userId, subject, clientId, nonce, email, preferredUsername, tenant)`，HS256 签名，含 `nonce` 防重放。
+- ID Token（OIDC）：`issueIdToken(userId, subject, clientId, nonce, email, preferredUsername, tenant)`，RS256 签名，含 `nonce` 防重放。
 
-> 切换 RS256：在 `JwtTokenService` 注入 `KeyPair` Bean，签发用 `SignatureAlgorithm.RS256`，公开 JWKS 端点返回公钥。当前 `/.well-known/jwks` 返回 HS256 的占位 kid。
+> RS256 已默认启用：`JwtTokenService` 用确定性 RSA-2048 keypair（issuer 为种子），两服务自动共享。生产环境通过 `iam.jwt.rsa-private-key-pem` / `iam.jwt.rsa-public-key-pem` 固定密钥对。
 
 ## 6. 安全配置
 
@@ -148,7 +148,7 @@ Filter 链：CORS → JwtAuthFilter。无 SAML/Kerberos。
 ### OIDC
 
 - Discovery：`/.well-known/openid-configuration` 返回 issuer、endpoints、`code_challenge_methods_supported: ["S256"]`、`scopes_supported: ["openid","profile","email"]`。
-- ID Token HS256，含 `nonce`。
+- ID Token RS256，含 `nonce`。
 - UserInfo 返回 sub、preferred_username、email、tenant。
 
 ### SAML 2.0

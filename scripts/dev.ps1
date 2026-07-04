@@ -110,6 +110,61 @@ function Ensure-Redis {
   throw "Redis not running on localhost:6379. Start your local Redis first."
 }
 
+function ConvertFrom-SecureStringToPlainText([securestring]$secure) {
+  $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+  try {
+    return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+  } finally {
+    if ($ptr -ne [IntPtr]::Zero) {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+    }
+  }
+}
+
+function Get-ConfigKeyPath {
+  return Join-Path $PSScriptRoot '.secrets\iam-config-key.txt'
+}
+
+function Read-StoredConfigDecryptKey {
+  $keyPath = Get-ConfigKeyPath
+  if (-not (Test-Path $keyPath)) { return $null }
+  try {
+    $secure = (Get-Content -Raw -LiteralPath $keyPath).Trim() | ConvertTo-SecureString
+    return ConvertFrom-SecureStringToPlainText $secure
+  } catch {
+    throw "Stored config decrypt key cannot be read. Delete $keyPath and run dev.bat again."
+  }
+}
+
+function Save-StoredConfigDecryptKey([string]$plainTextKey) {
+  $keyPath = Get-ConfigKeyPath
+  New-Item -ItemType Directory -Force -Path (Split-Path $keyPath -Parent) | Out-Null
+  ConvertTo-SecureString $plainTextKey -AsPlainText -Force |
+    ConvertFrom-SecureString |
+    Set-Content -LiteralPath $keyPath -Encoding ASCII
+}
+
+function Get-ConfigDecryptKey {
+  if ($env:IAM_CONFIG_KEY) { return $env:IAM_CONFIG_KEY }
+
+  $stored = Read-StoredConfigDecryptKey
+  if ($stored) { return $stored }
+
+  $secure = Read-Host "      Config decrypt key (hidden; set IAM_CONFIG_KEY to skip prompt)" -AsSecureString
+  if (-not $secure -or $secure.Length -eq 0) {
+    throw "Config decrypt key is required. Set IAM_CONFIG_KEY or enter it when prompted."
+  }
+  $plainTextKey = ConvertFrom-SecureStringToPlainText $secure
+  Save-StoredConfigDecryptKey $plainTextKey
+  return $plainTextKey
+}
+
+function Configure-EncryptedDevConfig {
+  $env:IAM_CONFIG_KEY = Get-ConfigDecryptKey
+  Write-Host "      using encrypted dev datasource config (credentials hidden)"
+  Write-Host "      Liquibase drop-first is enabled in auth-server dev config"
+}
+
 Write-Host "[0/4] stopping any previous java processes (target ports 8080/8081)"
 try {
   Get-Process -Name java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -119,6 +174,7 @@ Write-Host ""
 
 Write-Host "[1/4] redis check"
 Ensure-Redis
+Configure-EncryptedDevConfig
 
 Write-Host "[2/4] building backend (skip tests)"
 Push-Location backend
@@ -158,11 +214,11 @@ $front = Start-Process -FilePath 'npm.cmd' -ArgumentList 'run','dev' -PassThru -
 Pop-Location
 
 Write-Host ""
-Write-Host "IAM 平台已启动 (dev profile, RS256 JWK, H2):"
+Write-Host "IAM 平台已启动 (dev profile, RS256 JWK, MySQL):"
 Write-Host "  前端:         http://localhost:5173"
 Write-Host "  Auth Server:  http://localhost:8080/iam"
 Write-Host "  Admin Server: http://localhost:8081/iam"
-Write-Host "  H2 JDBC URL:  jdbc:h2:file:$env:USERPROFILE\iam-dev\iam;AUTO_SERVER=TRUE;MODE=MySQL"
+Write-Host "  MySQL:        configured via encrypted dev profile"
 Write-Host "  Redis:        localhost:6379"
 Write-Host "  演示账号:     admin / Iam@2026,  alice / User@2026"
 Write-Host "  OAuth2:       demo-client / demo-secret"

@@ -218,8 +218,30 @@ pre { padding: 1rem; overflow-x: auto; border: 1px solid var(--border); }
   --el-button-text-color: var(--danger) !important;
 }
 .el-button--danger:hover { --el-button-text-color: #fff !important; }
-.el-button.is-plain { background: var(--bg-card) !important; }
-.el-button.is-plain:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+.el-button.is-plain {
+  background: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+.el-button.el-button--primary.is-plain {
+  --el-button-bg-color: var(--bg-card) !important;
+  --el-button-border-color: var(--accent) !important;
+  --el-button-text-color: var(--accent) !important;
+  --el-button-hover-bg-color: var(--accent-soft) !important;
+  --el-button-hover-border-color: var(--accent) !important;
+  --el-button-hover-text-color: var(--accent) !important;
+  --el-button-active-bg-color: var(--accent-soft) !important;
+  --el-button-active-border-color: var(--accent) !important;
+}
+.el-button.is-plain:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.el-button.is-plain.el-button--danger:hover {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+  background: #fff !important;
+}
 
 /* ── Input ── */
 .el-input__wrapper, .el-textarea__inner {

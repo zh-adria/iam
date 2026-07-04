@@ -1,7 +1,6 @@
 @echo off
-rem IAM full-stack dev starter (Windows). Double-click or run from cmd.
-rem Auto-detects JDK 17+ and Maven from PATH / registry / common locations.
-rem Bypasses PowerShell execution policy for this run only.
+rem IAM one-click launcher (Windows). Double-click or run from cmd.
+rem Directly starts the dev stack via dev.ps1 — no menu, no interaction needed.
 cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0dev.ps1"
 if errorlevel 1 pause

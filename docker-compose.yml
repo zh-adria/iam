@@ -15,7 +15,7 @@ x-iam-service: &iam-service
     DB_USER: iam
     DB_PASS: iam123
     REDIS_HOST: redis
-    IAM_JWT_SECRET: CHANGE_ME_super_secret_at_least_32_bytes_long_for_HS256
+    IAM_JWT_SECRET: CHANGE_ME_32_bytes_for_mfa_hmac
 
 services:
   mysql:

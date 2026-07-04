@@ -4,6 +4,7 @@ import com.iam.app.dto.ApiResult;
 import com.iam.app.service.AdminAppService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -152,8 +153,13 @@ public class AdminController {
 
     @DeleteMapping("/tenants/{code}")
     public ApiResult<Void> deleteTenant(@PathVariable String code) {
-        admin.deleteTenant(code);
+        admin.deleteTenant(code.trim());
         return ApiResult.ok(null, "已删除");
+    }
+
+    @DeleteMapping("/tenants")
+    public ResponseEntity<ApiResult<Void>> deleteTenantWithoutCode() {
+        return ResponseEntity.badRequest().body(ApiResult.fail("BAD_REQUEST", "租户编码不能为空"));
     }
 
     // ---------- oauth2 clients ----------

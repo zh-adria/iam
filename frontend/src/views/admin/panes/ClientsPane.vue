@@ -15,10 +15,10 @@
       <el-table-column prop="redirectUris" label="回调地址" min-width="220" show-overflow-tooltip />
       <el-table-column prop="scopes" label="Scopes" min-width="160" show-overflow-tooltip />
       <el-table-column prop="createdAt" label="创建时间" width="160" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" min-width="160" align="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="onEdit(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-button size="small" plain type="primary" @click="onEdit(row)">编辑</el-button>
+          <el-button size="small" plain type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>

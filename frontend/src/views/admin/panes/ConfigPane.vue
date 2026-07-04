@@ -71,7 +71,7 @@ onMounted(async () => {
 
 const protocols = [
   { name: 'OAuth2 授权服务器', detail: '/oauth/{authorize,token,userinfo,introspect,revoke,jwks,.well-known}' },
-  { name: 'OIDC', detail: 'id_token (HS256) — 配置 RS256 + JWKS 需切换 jwt.secret 为 RSA 密钥对' },
+  { name: 'OIDC', detail: 'id_token (RS256) — JWKS 端点已公开公钥；固定密钥对用 iam.jwt.rsa-*-pem' },
   { name: 'SAML 2.0 SP', detail: 'iam.saml.idp.metadata-url 或 entity-id/sso-url — 改后重启' },
   { name: 'LDAP/AD', detail: 'iam.ldap.url — 空则禁用；按租户 LDAP 在租户管理配置' },
   { name: 'CAS SSO', detail: 'iam.cas.server-url — 空则禁用' },

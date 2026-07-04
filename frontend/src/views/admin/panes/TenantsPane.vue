@@ -21,10 +21,10 @@
         </template>
       </el-table-column>
       <el-table-column prop="ldapUrl" label="LDAP" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" min-width="160" align="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="onEdit(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-button size="small" plain type="primary" @click="onEdit(row)">编辑</el-button>
+          <el-button size="small" plain type="danger" @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -109,14 +109,13 @@ async function onSave(): Promise<void> {
   }
 }
 async function onDelete(row: TenantRow): Promise<void> {
-  if (!row?.code) { ElMessage.warning('租户数据异常，请刷新列表'); return }
   await ElMessageBox.confirm(`删除租户 ${row.code}?`, '确认删除', { type: 'warning' })
   try {
     await adminApi.deleteTenant(row.code)
     ElMessage.success('已删除')
     await load()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败（租户下可能仍有用户）')
+    ElMessage.error(e.response?.data?.message || e.message || '删除失败')
   }
 }
 onMounted(load)

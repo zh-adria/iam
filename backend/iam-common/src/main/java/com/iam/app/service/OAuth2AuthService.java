@@ -35,7 +35,7 @@ import java.util.Set;
 /**
  * OAuth2 Authorization Server: authorization_code (with PKCE), refresh_token, password, client_credentials.
  * OIDC: issues id_token when scope includes openid. RFC 7662 introspect + RFC 7009 revoke.
- * ponytail: HS256 shared secret — for multi-RS verification switch to RS256 + JWKS.
+ * RS256 — JwtTokenService handles keypair; this service delegates signing to it.
  */
 @Slf4j
 @Service

@@ -35,7 +35,7 @@
 | CAS 2.0 | `GET /iam/api/auth/cas/login`、`/callback` | serviceValidate 协议 |
 | OAuth2 授权码 + PKCE | `GET /iam/oauth/authorize`、`POST /iam/oauth/token` | S256 code_challenge |
 | OAuth2 client_credentials | `POST /iam/oauth/token` grant_type=client_credentials | 机机接入 |
-| OIDC ID Token | `POST /iam/oauth/token` scope=openid | HS256 签名，含 nonce |
+| OIDC ID Token | `POST /iam/oauth/token` scope=openid | RS256 签名，含 nonce |
 | Token introspect / revoke | `POST /iam/oauth/introspect`、`/revoke` | RFC 7662 / RFC 7009 |
 | Discovery + JWKS | `GET /iam/oauth/.well-known/openid-configuration`、`/jwks` | 标准 OIDC 发现 |
 | UserInfo | `GET /iam/oauth/userinfo` | OIDC userinfo endpoint |
@@ -73,7 +73,7 @@
 ## 5. 安全与合规
 
 - 密码：BCrypt（strength=10），失败 5 次锁定 30 分钟。
-- 令牌：JWT HS256，access 30 分钟、refresh 7 天。
+- 令牌：JWT RS256，access 30 分钟、refresh 7 天。
 - 审计：所有登录/授权/管理操作落 `audit_log`，记录 principal / action / ip / time / hash_chain_prev，支持篡改检测。
 - 权限模型：RBAC + 资源/动作 + SpEL 表达式（数据级权限）。
 - 限流：登录 10 次/分钟/IP（Redis 计数器）。
@@ -92,7 +92,7 @@
 
 - WebAuthn / Kerberos / SCIM 完整实现（仅 stub）
 - SCHEMA_PER_TENANT 的自动化 DDL 编排
-- RS256 + JWKS 公钥轮换（HS256 单实例够用）
+- RS256 + JWKS 公钥轮换（已落地 RSA keypair）
 - 邮件/SMS 真实发送通道（stub 日志输出，留接入点）
 - 多因素 FIDO2、无密码登录
 - 用户自助修改个人信息（仅 /me 查看）

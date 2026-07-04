@@ -152,7 +152,8 @@ public class AuthAppService {
     }
 
     private String issueMfaToken(Long userId) {
-        // ponytail: reuse JWT secret to sign a 5-min MFA continuation token.
+        // ponytail: MFA continuation token uses HMAC (separate from RS256 access tokens).
+        // Key derived from IAM_JWT_SECRET env var; consistent across services.
         return Jwts.builder()
                 .claim("uid", userId).claim("typ", "mfa")
                 .setIssuedAt(Date.from(Instant.now()))

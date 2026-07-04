@@ -128,7 +128,9 @@ export const adminApi = {
     await http.post('/tenants', b)
   },
   async deleteTenant(code: string): Promise<void> {
-    await http.delete(`/tenants/${code}`)
+    const tenantCode = code.trim()
+    if (!tenantCode) throw new Error('租户编码不能为空')
+    await http.delete(`/tenants/${encodeURIComponent(tenantCode)}`)
   },
   // clients
   async listClients(page = 1, size = 20): Promise<Page<ClientRow>> {

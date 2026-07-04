@@ -5,12 +5,10 @@ server:
 
 spring:
   datasource:
-    # ponytail: shares the same H2 file as iam-auth-server via AUTO_SERVER=TRUE.
-    # auth-server owns schema (liquibase) + DemoSeeder; admin just reads/writes.
-    url: jdbc:h2:file:${user.home}/iam-dev/iam;AUTO_SERVER=TRUE;MODE=MySQL;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    url: 'ENC(v1:qdr4pu5G2KgKhbsd:JiHf0jo0eGkhVKeBR4obE8X5S2FxtZh/dO8I+jseGoRX0TnuQDu6gY6zdM34dCx9VTlDVzmvlASBmt1DwCOWDmpDd4NEq84xoHWDjE86p7H5mlIYCqzegF8EOkBy6s8+cPMFtmK04cE3BEQzKOvH7USk6o0H2IYs245rGZMvOUi+4T95Yriox2pnaeA8sTHLw5ox3EP6i7rZzaEbJ6ZDHRUVTkkEYqOHmtI=)'
+    username: 'ENC(v1:bKyp8tixmxU9yNoY:CFOR70P04O+9Q9n2QTHwi+kSmm2pHLtd)'
+    password: 'ENC(v1:+LvnX7j1+CCpyYLP:sPtTiczWYu6EfGAfPX5ikjyZhU4Bwo/SD1uyrp7u1R4=)'
+    driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: none
@@ -29,6 +27,8 @@ spring:
 management:
   health:
     redis:
+      enabled: false
+    ldap:
       enabled: false
 
 iam:

@@ -48,7 +48,7 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 
 | 协议 | 状态 | 端点 |
 |------|------|------|
-| 密码登录 + JWT (HS256 / RS256) | ✅ | `POST /iam/api/auth/login` |
+| 密码登录 + JWT (RS256) | ✅ | `POST /iam/api/auth/login` |
 | MFA TOTP (RFC 6238) | ✅ | `/iam/api/auth/mfa/verify`、`/iam/api/users/mfa/*` |
 | 失败锁定 + 限流 | ✅ | Redis 计数 |
 | 多租户（SHARED / SCHEMA / DATABASE） | ✅ | `iam_tenant` |
