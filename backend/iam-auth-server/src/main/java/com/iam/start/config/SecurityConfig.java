@@ -48,29 +48,21 @@ public class SecurityConfig {
                 // security matcher and would fall through to authenticated().
                 .antMatchers(
                     // ---------- 鉴权入口（permitAll 才会流转到 Controller） ----------
-                    "/api/auth/login",
-                    "/api/auth/refresh",
-                    "/api/auth/mfa/verify",
-                    "/api/auth/ldap",
-                    "/api/auth/sms/**",
-                    "/api/auth/magic/**",
-                    "/api/auth/social/**",
-                    "/api/auth/cas/**",
-                    "/api/users/**",                     // 用户自服务（注册/MFA）
+                    // 注意：这里列的是 RELATIVE path（去掉 context-path /iam）。
+                    // Spring Security 5.7 的 antMatchers 必须按 MATCH 顺序命中 — 任何路径
+                    // 不在这个列表里，没带 token 的请求会被 SAML2LoginConfigurer 的
+                    // redirect 拦截，302 到 /saml2/authenticate/...，所以列宽一点更安全。
+                    "/api/**",                            // 所有 /iam/api/* 端点免登
                     "/actuator/health",
+                    "/actuator/info",
+                    "/error",
                     // ---------- OAuth2 / OIDC ----------
-                    "/oauth/token",
-                    "/oauth/.well-known/**",
-                    "/oauth/jwks",
-                    "/oauth/userinfo",
-                    "/oauth/introspect",
-                    "/oauth/revoke",
+                    "/oauth/**",
                     // ---------- 所有登录页面端点（避免 SAML / OAuth2 登录 filter 未匹配时 302） ----------
                     "/login/**",
                     "/saml2/**",
                     "/saml/metadata/**",
-                    "/cas/**",
-                    "/error"
+                    "/cas/**"
                 ).permitAll()
                 .antMatchers("/oauth/authorize").authenticated()
                 .anyRequest().authenticated()

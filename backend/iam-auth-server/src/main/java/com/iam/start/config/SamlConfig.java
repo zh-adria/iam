@@ -33,6 +33,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -106,15 +107,12 @@ public class SamlConfig {
         }
 
         if (regs.isEmpty()) {
-            log.warn("No SAML IdP configured — SAML login disabled");
-            // Return a placeholder that would never match to keep saml2Login() from failing on bootstrap
-            regs.add(RelyingPartyRegistration
-                    .withRegistrationId("disabled")
-                    .entityId(ymlSpEntityId)
-                    .assertionConsumerServiceLocation(ymlAcsBase + "/disabled")
-                    .idpWebSsoUrl("http://localhost:0/disabled")
-                    .remoteIdpEntityId("urn:disabled:idp")
-                    .build());
+            // 没有任何 IdP 时 SAM2 Login 不要注册 placeholder — placeholder 常被 /
+            // 触发导致 302 redirect loop（因为 registrationId="disabled" 的
+            // assertionConsumerServiceLocation 无实际处理端点，会被无限 redirect）。
+            // 不启用 saml2Login filter 完全禁用这个 feature。
+            log.warn("No SAML IdP configured — SAML 2.0 SP disabled (no saml2Login filter)");
+            return new InMemoryRelyingPartyRegistrationRepository(Collections.emptyList());
         }
 
         log.info("Loaded SAML IdP registrations: {}", regs.stream().map(RelyingPartyRegistration::getRegistrationId).collect(Collectors.joining(",")));
