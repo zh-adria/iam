@@ -15,6 +15,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -41,7 +42,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 } else {
                     @SuppressWarnings("unchecked")
                     List<String> perms = (List<String>) c.getOrDefault("perms", Collections.emptyList());
-                    var auths = perms.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList());
+                    List<String> roles = (List<String>) c.getOrDefault("roles", Collections.emptyList());
+                    // Both roles and perms become Spring Security authorities so
+                    // @PreAuthorize("hasRole('ADMIN')") and permission checks work.
+                    // Roles are stored without ROLE_ prefix in the DB but with the
+                    // prefix in the JWT claim, so Spring's default VoteRolePrefix
+                    // matches direct authority names like "ROLE_ADMIN" here.
+                    List<SimpleGrantedAuthority> auths = new ArrayList<>();
+                    for (String r : roles) auths.add(new SimpleGrantedAuthority(r));
+                    for (String p : perms) auths.add(new SimpleGrantedAuthority(p));
                     var principal = new IamPrincipal(c.get("uid", Long.class), c.getSubject(),
                             c.get("tenant", String.class), c.get("roles", List.class));
                     var sat = new UsernamePasswordAuthenticationToken(principal, null, auths);

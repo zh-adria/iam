@@ -8,6 +8,18 @@ http.interceptors.request.use(cfg => {
   return cfg
 })
 
+http.interceptors.response.use(
+  r => r,
+  err => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('roles')
+      if (!location.pathname.startsWith('/login')) location.href = '/login'
+    }
+    return Promise.reject(err)
+  }
+)
+
 export interface Page<T> { total: number; page: number; size: number; rows: T[] }
 
 export interface UserRow {

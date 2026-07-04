@@ -44,17 +44,30 @@ public class DemoSeeder implements CommandLineRunner {
         upsertRole("ROLE_AUDITOR", "审计员", "default");
 
         upsertPerm("iam:user:assign-role", "API", "分配角色");
+        upsertPerm("iam:user:create", "API", "创建用户");
+        upsertPerm("iam:user:delete", "API", "删除用户");
         upsertPerm("iam:role:create", "API", "创建角色");
         upsertPerm("iam:role:grant", "API", "授权角色");
         upsertPerm("iam:permission:create", "API", "创建权限");
+        upsertPerm("iam:permission:delete", "API", "删除权限");
         upsertPerm("iam:client:create", "API", "注册客户端");
+        upsertPerm("iam:tenant:write", "API", "租户配置");
+        upsertPerm("iam:config:read", "API", "读取系统配置");
+        upsertPerm("iam:audit:read", "API", "读取审计");
         upsertPerm("iam:menu:dashboard", "MENU", "仪表盘");
 
+        // ROLE_ADMIN：拥有全部 iam:* 级别的权限（管理员角色全权限）
         grant("ROLE_ADMIN", "iam:user:assign-role");
+        grant("ROLE_ADMIN", "iam:user:create");
+        grant("ROLE_ADMIN", "iam:user:delete");
         grant("ROLE_ADMIN", "iam:role:create");
         grant("ROLE_ADMIN", "iam:role:grant");
         grant("ROLE_ADMIN", "iam:permission:create");
+        grant("ROLE_ADMIN", "iam:permission:delete");
         grant("ROLE_ADMIN", "iam:client:create");
+        grant("ROLE_ADMIN", "iam:tenant:write");
+        grant("ROLE_ADMIN", "iam:config:read");
+        grant("ROLE_ADMIN", "iam:audit:read");
         grant("ROLE_ADMIN", "iam:menu:dashboard");
         grant("ROLE_USER", "iam:menu:dashboard");
         grant("ROLE_AUDITOR", "iam:menu:dashboard");

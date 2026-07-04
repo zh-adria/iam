@@ -103,10 +103,15 @@ async function loadAvailableRoles(): Promise<void> {
 }
 
 async function onCreate(): Promise<void> {
-  await adminApi.createUser(form.value)
-  ElMessage.success('已创建')
-  showCreate.value = false
-  await load()
+  try {
+    await adminApi.createUser(form.value)
+    ElMessage.success('已创建')
+    showCreate.value = false
+    form.value = { username: '', password: '', email: '', phone: '', tenantCode: 'default' }
+    await load()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '创建失败')
+  }
 }
 
 async function openAssignRoles(row: UserRow): Promise<void> {
