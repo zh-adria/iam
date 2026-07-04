@@ -110,6 +110,13 @@ function Ensure-Redis {
   throw "Redis not running on localhost:6379. Start your local Redis first."
 }
 
+Write-Host "[0/4] stopping any previous java processes (target ports 8080/8081)"
+try {
+  Get-Process -Name java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+} catch {}
+Write-Host ""
+
 Write-Host "[1/4] redis check"
 Ensure-Redis
 
