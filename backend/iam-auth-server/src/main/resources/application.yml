@@ -51,6 +51,7 @@ iam:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
   saml:
+    enabled: false
     idp:
       # ponytail: leave empty to disable SAML SSO. Fill in for real IdP (Azure AD / Shibboleth / Keycloak).
       metadata-url:

@@ -4,6 +4,7 @@ import com.iam.infrastructure.security.AbacMethodSecurityExpressionHandler;
 import com.iam.infrastructure.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -31,10 +32,19 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
-    private final AuthenticationSuccessHandler samlSuccessHandler;
+    private final ApplicationContext applicationContext;
 
     @Value("${iam.cors.allowed-origins:http://localhost:5173}")
     private String[] allowedOrigins;
+
+    /** SAML 成功处理器 — 如果 SamlConfig 没启用（iam.saml.enabled != true），这个 bean 也不存在。 */
+    private AuthenticationSuccessHandler samlSuccessHandlerOrNull() {
+        try {
+            return applicationContext.getBean(AuthenticationSuccessHandler.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -43,22 +53,13 @@ public class SecurityConfig {
             .cors().configurationSource(corsSource()).and()
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and()
             .authorizeRequests()
-                // ponytail: antMatchers are RELATIVE to the context-path (/iam).
-                // Do NOT prefix them with /iam — that path never reaches the
-                // security matcher and would fall through to authenticated().
+                // RELATIVE path（去掉 context-path /iam）。
                 .antMatchers(
-                    // ---------- 鉴权入口（permitAll 才会流转到 Controller） ----------
-                    // 注意：这里列的是 RELATIVE path（去掉 context-path /iam）。
-                    // Spring Security 5.7 的 antMatchers 必须按 MATCH 顺序命中 — 任何路径
-                    // 不在这个列表里，没带 token 的请求会被 SAML2LoginConfigurer 的
-                    // redirect 拦截，302 到 /saml2/authenticate/...，所以列宽一点更安全。
                     "/api/**",                            // 所有 /iam/api/* 端点免登
                     "/actuator/health",
                     "/actuator/info",
                     "/error",
-                    // ---------- OAuth2 / OIDC ----------
-                    "/oauth/**",
-                    // ---------- 所有登录页面端点（避免 SAML / OAuth2 登录 filter 未匹配时 302） ----------
+                    "/oauth/**",                          // OIDC/OAuth2 都不需要登录即可调
                     "/login/**",
                     "/saml2/**",
                     "/saml/metadata/**",
@@ -67,8 +68,13 @@ public class SecurityConfig {
                 .antMatchers("/oauth/authorize").authenticated()
                 .anyRequest().authenticated()
             .and()
-            .saml2Login(saml -> saml.successHandler(samlSuccessHandler))
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // 只在 SamlConfig 成功装配时才启用 saml2Login filter — 避免空 registration 列表报错。
+        AuthenticationSuccessHandler samlHandler = samlSuccessHandlerOrNull();
+        if (samlHandler != null) {
+            http.saml2Login(saml -> saml.successHandler(samlHandler));
+        }
         return http.build();
     }
 

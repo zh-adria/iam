@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.saml2.provider.service.authentication.Saml2AuthenticatedPrincipal;
@@ -49,6 +51,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "iam.saml", name = "enabled", havingValue = "true", matchIfMissing = false)
 public class SamlConfig {
 
     @Value("${iam.saml.idp.metadata-url:}")
@@ -107,12 +110,11 @@ public class SamlConfig {
         }
 
         if (regs.isEmpty()) {
-            // 没有任何 IdP 时 SAM2 Login 不要注册 placeholder — placeholder 常被 /
-            // 触发导致 302 redirect loop（因为 registrationId="disabled" 的
-            // assertionConsumerServiceLocation 无实际处理端点，会被无限 redirect）。
-            // 不启用 saml2Login filter 完全禁用这个 feature。
-            log.warn("No SAML IdP configured — SAML 2.0 SP disabled (no saml2Login filter)");
-            return new InMemoryRelyingPartyRegistrationRepository(Collections.emptyList());
+            log.warn("No SAML IdP configured — SAML 2.0 SP disabled");
+            // 空列表会让 InMemoryRelyingPartyRegistrationRepository 抛出 IllegalArgumentException。
+            // SecurityConfig 里 saml2Login() 只在 iam.saml.enabled=true 时添加。
+            // 这里直接返回 null 让 SecurityConfig 知道不应启用 SAML。
+            return null;
         }
 
         log.info("Loaded SAML IdP registrations: {}", regs.stream().map(RelyingPartyRegistration::getRegistrationId).collect(Collectors.joining(",")));
