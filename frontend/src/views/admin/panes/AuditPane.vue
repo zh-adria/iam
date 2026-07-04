@@ -51,7 +51,8 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     const userId = userFilter.value ? Number(userFilter.value) : undefined
-    allRows.value = (await adminApi.listAudit(1, 100, userId)).rows
+    const res = await adminApi.listAudit(1, 100, userId)
+    allRows.value = res.rows
     reset()
   } finally { loading.value = false }
 }

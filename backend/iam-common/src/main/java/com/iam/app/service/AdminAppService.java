@@ -16,6 +16,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 /**
  * Admin-side service: CRUD for users/roles/permissions/tenants/clients + runtime config.
  * Lives in iam-common; wired only into the iam-admin service via AdminController.
@@ -107,9 +112,14 @@ public class AdminAppService {
     }
 
     // ---------- roles ----------
-    public List<Map<String, Object>> listRoles(String tenant) {
-        return roleRepo.findAll().stream()
+    public Page<Map<String, Object>> listRoles(int page, int size, String tenant) {
+        Pageable p = PageRequest.of(Math.max(page - 1, 0), size);
+        List<RoleEntity> filtered = roleRepo.findAll().stream()
                 .filter(r -> tenant == null || tenant.isEmpty() || tenant.equals(r.getTenantCode()))
+                .collect(Collectors.toList());
+        int total = filtered.size();
+        List<Map<String, Object>> rows = filtered.stream()
+                .skip(p.getOffset()).limit(p.getPageSize())
                 .map(r -> {
                     Map<String, Object> m = new HashMap<>();
                     m.put("code", r.getCode());
@@ -117,6 +127,7 @@ public class AdminAppService {
                     m.put("tenant", r.getTenantCode());
                     return m;
                 }).collect(Collectors.toList());
+        return new PageImpl<>(rows, p, total);
     }
 
     @Transactional
@@ -145,17 +156,23 @@ public class AdminAppService {
     }
 
     // ---------- permissions ----------
-    public List<Map<String, Object>> listPermissions() {
-        return permRepo.findAll().stream().map(p -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("code", p.getCode());
-            m.put("type", p.getType());
-            m.put("name", p.getName());
-            m.put("resource", p.getResource());
-            m.put("action", p.getAction());
-            m.put("spel", p.getSpelExpression());
-            return m;
-        }).collect(Collectors.toList());
+    public Page<Map<String, Object>> listPermissions(int page, int size) {
+        Pageable p = PageRequest.of(Math.max(page - 1, 0), size);
+        List<PermissionEntity> all = permRepo.findAll();
+        int total = all.size();
+        List<Map<String, Object>> rows = all.stream()
+                .skip(p.getOffset()).limit(p.getPageSize())
+                .map(pe -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("code", pe.getCode());
+                    m.put("type", pe.getType());
+                    m.put("name", pe.getName());
+                    m.put("resource", pe.getResource());
+                    m.put("action", pe.getAction());
+                    m.put("spel", pe.getSpelExpression());
+                    return m;
+                }).collect(Collectors.toList());
+        return new PageImpl<>(rows, p, total);
     }
 
     @Transactional
@@ -190,19 +207,25 @@ public class AdminAppService {
     }
 
     // ---------- tenants ----------
-    public List<Map<String, Object>> listTenants() {
-        return tenantRepo.findAll().stream().map(t -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", t.getId());
-            m.put("code", t.getCode());
-            m.put("name", t.getName());
-            m.put("isolationMode", t.getIsolationMode());
-            m.put("schemaName", t.getSchemaName());
-            m.put("ldapUrl", t.getLdapUrl());
-            m.put("ldapBase", t.getLdapBase());
-            m.put("enabled", t.getEnabled());
-            return m;
-        }).collect(Collectors.toList());
+    public Page<Map<String, Object>> listTenants(int page, int size) {
+        Pageable p = PageRequest.of(Math.max(page - 1, 0), size);
+        List<TenantEntity> all = tenantRepo.findAll();
+        int total = all.size();
+        List<Map<String, Object>> rows = all.stream()
+                .skip(p.getOffset()).limit(p.getPageSize())
+                .map(t -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id", t.getId());
+                    m.put("code", t.getCode());
+                    m.put("name", t.getName());
+                    m.put("isolationMode", t.getIsolationMode());
+                    m.put("schemaName", t.getSchemaName());
+                    m.put("ldapUrl", t.getLdapUrl());
+                    m.put("ldapBase", t.getLdapBase());
+                    m.put("enabled", t.getEnabled());
+                    return m;
+                }).collect(Collectors.toList());
+        return new PageImpl<>(rows, p, total);
     }
 
     @Transactional
@@ -224,16 +247,22 @@ public class AdminAppService {
     }
 
     // ---------- oauth2 clients ----------
-    public List<Map<String, Object>> listClients() {
-        return clientRepo.findAll().stream().map(c -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("clientId", c.getClientId());
-            m.put("grantTypes", c.getGrantTypes());
-            m.put("redirectUris", c.getRedirectUris());
-            m.put("scopes", c.getScopes());
-            m.put("createdAt", c.getCreatedAt());
-            return m;
-        }).collect(Collectors.toList());
+    public Page<Map<String, Object>> listClients(int page, int size) {
+        Pageable p = PageRequest.of(Math.max(page - 1, 0), size);
+        List<OAuth2ClientEntity> all = clientRepo.findAll();
+        int total = all.size();
+        List<Map<String, Object>> rows = all.stream()
+                .skip(p.getOffset()).limit(p.getPageSize())
+                .map(c -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("clientId", c.getClientId());
+                    m.put("grantTypes", c.getGrantTypes());
+                    m.put("redirectUris", c.getRedirectUris());
+                    m.put("scopes", c.getScopes());
+                    m.put("createdAt", c.getCreatedAt());
+                    return m;
+                }).collect(Collectors.toList());
+        return new PageImpl<>(rows, p, total);
     }
 
     @Transactional

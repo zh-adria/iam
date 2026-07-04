@@ -88,11 +88,7 @@ export const adminApi = {
     await http.delete(`/users/${id}/roles/${role}`)
   },
   // roles
-  async listRoles(tenant?: string): Promise<RoleRow[]> {
-    const { data } = await http.get('/roles', { params: { tenant } })
-    return data.data
-  },
-  async listRolesPaged(page = 1, size = 20, tenant?: string): Promise<Page<RoleRow>> {
+  async listRoles(page = 1, size = 20, tenant?: string): Promise<Page<RoleRow>> {
     const { data } = await http.get('/roles', { params: { page, size, tenant } })
     return data.data
   },
@@ -107,8 +103,8 @@ export const adminApi = {
     return data.data || []
   },
   // permissions
-  async listPermissions(): Promise<PermRow[]> {
-    const { data } = await http.get('/permissions')
+  async listPermissions(page = 1, size = 20): Promise<Page<PermRow>> {
+    const { data } = await http.get('/permissions', { params: { page, size } })
     return data.data
   },
   async createPermission(b: Record<string, string>): Promise<void> {
@@ -124,8 +120,8 @@ export const adminApi = {
     await http.delete(`/roles/${role}/permissions/${perm}`)
   },
   // tenants
-  async listTenants(): Promise<TenantRow[]> {
-    const { data } = await http.get('/tenants')
+  async listTenants(page = 1, size = 20): Promise<Page<TenantRow>> {
+    const { data } = await http.get('/tenants', { params: { page, size } })
     return data.data
   },
   async upsertTenant(b: Record<string, unknown>): Promise<void> {
@@ -135,8 +131,8 @@ export const adminApi = {
     await http.delete(`/tenants/${code}`)
   },
   // clients
-  async listClients(): Promise<ClientRow[]> {
-    const { data } = await http.get('/oauth2/clients')
+  async listClients(page = 1, size = 20): Promise<Page<ClientRow>> {
+    const { data } = await http.get('/oauth2/clients', { params: { page, size } })
     return data.data
   },
   async upsertClient(b: Record<string, string>): Promise<void> {

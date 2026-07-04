@@ -123,12 +123,12 @@ const filteredPerms = computed(() => {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [roleRes, permRes] = await Promise.all([adminApi.listRoles(), adminApi.listPermissions()])
-    allRows.value = roleRes
-    allPerms.value = permRes
+    const [roleRes, permRes] = await Promise.all([adminApi.listRoles(1, 500), adminApi.listPermissions(1, 500)])
+    allRows.value = roleRes.rows
+    allPerms.value = permRes.rows
     resetPage()
     const entries = await Promise.all(
-      roleRes.map(async r => [r.code, await adminApi.listRolePermissions(r.code)] as const)
+      allRows.value.map(async r => [r.code, await adminApi.listRolePermissions(r.code)] as const)
     )
     rolePerms.value = Object.fromEntries(entries)
   } finally {

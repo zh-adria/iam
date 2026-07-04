@@ -98,7 +98,8 @@ function resetForm() {
 async function load(): Promise<void> {
   loading.value = true
   try {
-    allRows.value = await adminApi.listClients()
+    const res = await adminApi.listClients(1, 500)
+    allRows.value = res.rows
     reset()
   } finally { loading.value = false }
 }

@@ -3,9 +3,11 @@ package com.iam.adapter.controller;
 import com.iam.app.dto.ApiResult;
 import com.iam.app.service.AdminAppService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -76,8 +78,11 @@ public class AdminController {
 
     // ---------- roles ----------
     @GetMapping("/roles")
-    public ApiResult<Object> listRoles(@RequestParam(required = false) String tenant) {
-        return ApiResult.ok(admin.listRoles(tenant));
+    public ApiResult<Map<String, Object>> listRoles(@RequestParam(defaultValue = "1") int page,
+                                                    @RequestParam(defaultValue = "20") int size,
+                                                    @RequestParam(required = false) String tenant) {
+        var rolesPage = admin.listRoles(page, size, tenant);
+        return ApiResult.ok(toResultMap(rolesPage));
     }
 
     @PostMapping("/roles")
@@ -99,8 +104,10 @@ public class AdminController {
 
     // ---------- permissions ----------
     @GetMapping("/permissions")
-    public ApiResult<Object> listPermissions() {
-        return ApiResult.ok(admin.listPermissions());
+    public ApiResult<Map<String, Object>> listPermissions(@RequestParam(defaultValue = "1") int page,
+                                                          @RequestParam(defaultValue = "20") int size) {
+        var p = admin.listPermissions(page, size);
+        return ApiResult.ok(toResultMap(p));
     }
 
     @PostMapping("/permissions")
@@ -130,8 +137,9 @@ public class AdminController {
 
     // ---------- tenants ----------
     @GetMapping("/tenants")
-    public ApiResult<Object> listTenants() {
-        return ApiResult.ok(admin.listTenants());
+    public ApiResult<Map<String, Object>> listTenants(@RequestParam(defaultValue = "1") int page,
+                                                      @RequestParam(defaultValue = "20") int size) {
+        return ApiResult.ok(toResultMap(admin.listTenants(page, size)));
     }
 
     @PostMapping("/tenants")
@@ -150,8 +158,9 @@ public class AdminController {
 
     // ---------- oauth2 clients ----------
     @GetMapping("/oauth2/clients")
-    public ApiResult<Object> listClients() {
-        return ApiResult.ok(admin.listClients());
+    public ApiResult<Map<String, Object>> listClients(@RequestParam(defaultValue = "1") int page,
+                                                      @RequestParam(defaultValue = "20") int size) {
+        return ApiResult.ok(toResultMap(admin.listClients(page, size)));
     }
 
     @PostMapping("/oauth2/clients")
@@ -200,6 +209,15 @@ public class AdminController {
                                                      @RequestParam(defaultValue = "50") int size,
                                                      @RequestParam(required = false) Long userId) {
         return ApiResult.ok(admin.listAudit(page, size, userId));
+    }
+
+    private Map<String, Object> toResultMap(org.springframework.data.domain.Page<?> page) {
+        Map<String, Object> r = new HashMap<>();
+        r.put("total", page.getTotalElements());
+        r.put("page", page.getNumber() + 1);
+        r.put("size", page.getSize());
+        r.put("rows", page.getContent());
+        return r;
     }
 
     // ---------- config ----------

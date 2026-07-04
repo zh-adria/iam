@@ -83,7 +83,8 @@ const { page, size, rows, total, reset } = usePagination(allRows)
 async function load(): Promise<void> {
   loading.value = true
   try {
-    allRows.value = await adminApi.listTenants()
+    const res = await adminApi.listTenants(1, 500)
+    allRows.value = res.rows
     reset()
   } finally { loading.value = false }
 }

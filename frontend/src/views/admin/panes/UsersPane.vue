@@ -109,7 +109,8 @@ const saving = ref(false)
 async function load(): Promise<void> {
   loading.value = true
   try {
-    allRows.value = (await adminApi.listUsers(1, 100, tenant.value || undefined)).rows
+    const res = await adminApi.listUsers(1, 100, tenant.value || undefined)
+    allRows.value = res.rows
     reset()
   } finally { loading.value = false }
 }
