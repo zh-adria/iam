@@ -306,7 +306,7 @@ function oauth2Authorize(): void {
     radial-gradient(ellipse 80% 60% at 0% 100%, rgba(111, 92, 240, 0.20) 0%, transparent 70%);
   pointer-events: none;
 }
-.hero-inner { position: relative; z-index: 1; width: 100%; max-width: 480px; }
+.hero-inner { position: relative; z-index: 1; width: 100%; max-width: 480px; color: #fff; }
 
 .hero-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 56px; }
 .hero-mark {
@@ -335,6 +335,8 @@ function oauth2Authorize(): void {
   line-height: 1.1;
   letter-spacing: -0.04em;
   margin-bottom: 18px;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 .hero-sub {
   font-size: 1.05rem;
