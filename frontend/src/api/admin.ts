@@ -20,6 +20,8 @@ export interface UserRow {
   mfaEnabled: boolean
   roles: string[]
 }
+export interface RolePerms { code: string; perms: string[] }
+export interface UserRolesRes { id: number; roles: string[] }
 
 export interface RoleRow { code: string; name: string; tenant: string }
 export interface PermRow { code: string; type: string; name: string; resource: string; action: string; spel: string }
@@ -65,6 +67,10 @@ export const adminApi = {
   },
   async deleteRole(code: string): Promise<void> {
     await http.delete(`/roles/${code}`)
+  },
+  async listRolePermissions(role: string): Promise<string[]> {
+    const { data } = await http.get(`/roles/${role}/permissions`)
+    return data.data || []
   },
   // permissions
   async listPermissions(): Promise<PermRow[]> {

@@ -14,12 +14,16 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Idempotent demo seeder. Runs on every startup in 'demo' profile; creates demo tenant/users/roles/permissions
- * only if they don't already exist. Production starts with {@code spring.profiles.active} excluding 'demo'.
+ * Idempotent demo seeder. Runs on every startup in 'dev'/'demo'/'test' profiles; creates demo
+ * tenant/users/roles/permissions only if they don't already exist. Production starts with
+ * {@code spring.profiles.active} excluding these profiles.
+ *
+ * ponytail: dev profile runs DemoSeeder so `dev.bat`/`dev.ps1` users get a working admin/Iam@2026
+ * account out of the box. H2 is empty on first launch → without this, /login returns TENANT_NOT_FOUND.
  */
 @Slf4j
 @Component
-@Profile({"demo", "test"})
+@Profile({"dev", "demo", "test"})
 @RequiredArgsConstructor
 public class DemoSeeder implements CommandLineRunner {
 

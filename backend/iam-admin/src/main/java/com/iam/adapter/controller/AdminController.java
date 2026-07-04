@@ -92,6 +92,11 @@ public class AdminController {
         return ApiResult.ok(null, "已删除");
     }
 
+    @GetMapping("/roles/{role}/permissions")
+    public ApiResult<Object> listRolePermissions(@PathVariable String role) {
+        return ApiResult.ok(admin.listRolePermissions(role));
+    }
+
     // ---------- permissions ----------
     @GetMapping("/permissions")
     public ApiResult<Object> listPermissions() {

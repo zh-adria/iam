@@ -1,12 +1,11 @@
 <template>
   <div class="admin-view">
     <!-- Sidebar -->
-    <nav class="sidebar glass">
+    <nav class="sidebar">
       <div class="sidebar-brand">
         <div class="brand-icon">
-          <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="4" width="32" height="32" rx="8" stroke="currentColor" stroke-width="2" />
-            <path d="M14 20l4 4 8-8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 20l4 4 8-8" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div>
@@ -15,31 +14,65 @@
         </div>
       </div>
 
-      <div class="nav-divider" />
+      <div class="nav-section">管理</div>
 
       <div class="nav-items">
-        <button v-for="item in navItems" :key="item.key" :class="['nav-item', { active: tab === item.key }]" @click="tab = item.key">
+        <button
+          v-for="item in navItems"
+          :key="item.key"
+          :class="['nav-item', { active: tab === item.key }]"
+          @click="tab = item.key"
+        >
           <span class="nav-icon" v-html="item.icon" />
           <span>{{ item.label }}</span>
         </button>
       </div>
 
       <div class="sidebar-footer">
-        <button class="nav-item back-btn" @click="router.push('/dashboard')">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-          <span>返回控制台</span>
-        </button>
+        <el-button text class="back-btn" @click="router.push('/dashboard')">
+          <el-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></el-icon>
+          返回控制台
+        </el-button>
       </div>
     </nav>
 
     <!-- Content -->
     <main class="admin-content">
-      <header class="content-header">
-        <h2>{{ currentItem?.label }}</h2>
-        <div class="breadcrumb">
-          <span>管理后台</span>
-          <span class="sep">/</span>
-          <span>{{ currentItem?.label }}</span>
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="topbar-left">
+            <h2>{{ currentItem?.label }}</h2>
+            <div class="breadcrumb-bar">
+              <span>管理后台</span>
+              <span class="sep">/</span>
+              <span>{{ currentItem?.label }}</span>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <el-button text class="icon-btn" title="返回控制台" @click="router.push('/dashboard')">
+              <el-icon><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></el-icon>
+            </el-button>
+            <div class="user-menu">
+              <el-dropdown trigger="click" @command="onUserCmd">
+                <button class="user-btn">
+                  <div class="avatar">{{ avatarText }}</div>
+                  <svg :class="['chevron', { open: dropdownOpen }]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="back">
+                      <el-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></el-icon>
+                      返回控制台
+                    </el-dropdown-item>
+                    <el-dropdown-item command="logout" divided>
+                      <el-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></el-icon>
+                      登出
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
         </div>
       </header>
       <div class="content-body">
@@ -50,8 +83,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, defineComponent, computed } from 'vue'
+import { ref, defineComponent, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { api, hasRole } from '../../api'
 import UsersPane from './panes/UsersPane.vue'
 import RolesPane from './panes/RolesPane.vue'
 import PermsPane from './panes/PermsPane.vue'
@@ -62,18 +97,24 @@ import ConfigPane from './panes/ConfigPane.vue'
 
 const router = useRouter()
 const tab = ref('users')
+const dropdownOpen = ref(false)
+const username = ref('')
 
-const views: Record<string, ReturnType<typeof defineComponent>> = {
-  users: UsersPane,
-  roles: RolesPane,
-  perms: PermsPane,
-  clients: ClientsPane,
-  tenants: TenantsPane,
-  audit: AuditPane,
-  config: ConfigPane
+type Cmd = 'back' | 'logout'
+const onUserCmd = async (c: Cmd | string) => {
+  if (c === 'back') {
+    router.push('/dashboard')
+  } else if (c === 'logout') {
+    try {
+      await api.logout()
+      ElMessage.success('已登出')
+      router.push('/login')
+    } catch { router.push('/login') }
+  }
 }
 
-const navItems = [
+type NavItem = { key: string; label: string; icon: string }
+const navItems: NavItem[] = [
   { key: 'users', label: '用户管理',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' },
   { key: 'roles', label: '角色管理',
@@ -90,7 +131,27 @@ const navItems = [
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>' },
 ]
 
+const views: Record<string, ReturnType<typeof defineComponent>> = {
+  users: UsersPane,
+  roles: RolesPane,
+  perms: PermsPane,
+  clients: ClientsPane,
+  tenants: TenantsPane,
+  audit: AuditPane,
+  config: ConfigPane
+}
+
 const currentItem = computed(() => navItems.find(i => i.key === tab.value))
+const isAdmin = computed(() => hasRole('ROLE_ADMIN'))
+
+onMounted(async () => {
+  try {
+    const me = await api.me()
+    username.value = String(me.username || '')
+  } catch { /* ignore */ }
+})
+
+const avatarText = computed(() => (username.value || 'U').charAt(0).toUpperCase())
 </script>
 
 <style scoped>
@@ -99,124 +160,158 @@ const currentItem = computed(() => navItems.find(i => i.key === tab.value))
   min-height: 100vh;
   position: relative;
   z-index: 1;
+  background: var(--bg-wash);
 }
 
-/* ── Sidebar ── */
+/* ═══════════════════════════════════════════
+   Sidebar — deep indigo, stable dark surface
+   ═══════════════════════════════════════════ */
 .sidebar {
   width: 240px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 20px 12px;
-  border-right: 1px solid var(--border) !important;
-  background: rgba(11, 15, 26, 0.7) !important;
-  backdrop-filter: blur(20px);
+  padding: 18px 12px;
+  background: #0b0d1f;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  color: #c9c3ff;
   position: sticky;
   top: 0;
   height: 100vh;
-  border-radius: 0 !important;
 }
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 8px 12px;
+  gap: 10px;
+  padding: 6px 10px 18px;
 }
 .brand-icon {
-  width: 36px; height: 36px;
-  color: var(--accent);
-  filter: drop-shadow(0 0 8px var(--accent-glow));
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #6f5cf0, #1c1e54);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
+.brand-icon svg { width: 18px; height: 18px; }
 .brand-name {
   font-family: var(--font-heading);
   font-weight: 800;
-  font-size: 1.3rem;
-  background: linear-gradient(135deg, var(--accent), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 1.2rem;
+  color: #fff;
   letter-spacing: -0.03em;
+  line-height: 1;
 }
 .brand-role {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  font-weight: 500;
+  font-size: 0.65rem;
+  color: rgba(201, 195, 255, 0.55);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
 }
-.nav-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 8px 0 12px;
+.nav-section {
+  padding: 12px 10px 6px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(201, 195, 255, 0.32);
 }
-.nav-items { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.nav-items { flex: 1; display: flex; flex-direction: column; gap: 1px; }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 11px 14px;
+  gap: 10px;
+  padding: 9px 12px;
   border-radius: var(--radius-md);
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: rgba(201, 195, 255, 0.7);
   font-family: var(--font-body);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--dur-fast) var(--ease-out);
   width: 100%;
   text-align: left;
 }
-.nav-item:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+.nav-item:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
 .nav-item.active {
-  color: var(--accent);
-  background: rgba(0, 212, 255, 0.08);
-  box-shadow: inset 3px 0 0 var(--accent);
+  color: #fff;
+  background: linear-gradient(90deg, rgba(91, 77, 255, 0.18), transparent);
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }
 .nav-icon { display: flex; flex-shrink: 0; }
 .nav-icon svg { width: 18px; height: 18px; }
 
 .sidebar-footer {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   padding-top: 8px;
   margin-top: 8px;
 }
-.back-btn { color: var(--text-muted); }
-.back-btn:hover { color: var(--danger) !important; }
+.back-btn {
+  width: 100% !important;
+  justify-content: flex-start !important;
+  color: rgba(201, 195, 255, 0.55) !important;
+  padding: 8px 12px !important;
+}
+.back-btn:hover { color: #fff !important; }
 
-/* ── Content ── */
+/* ═══════════════════════════════════════════
+   Content — light canvas (same as dashboard)
+   ═══════════════════════════════════════════ */
 .admin-content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg-wash);
 }
-.content-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  padding: 20px 32px;
-  background: rgba(11, 15, 26, 0.8);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+.admin-content .topbar { background: var(--bg-card); }
+.admin-content .topbar-inner { max-width: 1400px; }
+.admin-content .topbar-left h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
 }
-.content-header h2 {
-  font-size: 1.3rem;
-  color: var(--text-primary);
-}
-.breadcrumb {
+
+.icon-btn { color: var(--text-secondary) !important; }
+.icon-btn:hover { color: var(--accent) !important; }
+
+.user-menu { position: relative; }
+.user-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  gap: 6px;
+  padding: 6px 12px 6px 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  color: var(--text-primary);
+  font-family: var(--font-body);
 }
-.breadcrumb .sep { color: var(--border-hover); }
+.user-btn:hover { border-color: var(--border-hover); background: var(--accent-soft); }
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #fff;
+}
+.chevron { transition: transform var(--dur-fast) ease; }
+.chevron.open { transform: rotate(180deg); }
 
 .content-body {
   flex: 1;
-  padding: 24px 32px;
+  padding: 24px 28px;
+  min-height: 0;
 }
 
 /* ── Responsive ── */

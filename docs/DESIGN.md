@@ -1,0 +1,259 @@
+# IAM Platform — 设计手册
+
+> 版本：1.0.0 · 更新：2026-07-04
+
+本手册记录 IAM 控制台前端的视觉与交互规范（品牌、排版、布局、组件）。单品类用途见本手册，不要叠加 CSS hack。
+
+## 1. 设计原则
+
+| 原则 | 实践 |
+|------|------|
+| **克制留白** | 单屏不超过 2 层不同阴影，默认 `shadow-sm` → hover `shadow-md` |
+| **层次清晰** | 字号梯度：12px caption / 14px body / 16px H3 / 20px H2 / 28px H1；字重 400/500/600/700 |
+| **色板节制** | 全局只用 accent + 灰度 + 4 个语义色（success/danger/warning/info） |
+| **圆角一致** | 按钮 8 / 卡片 10 / 模态 14 / 胶囊 9999 |
+| **微动效** | 180ms ease-out，hover `translateY(-2px)`，modal 用 `scaleIn` |
+| **组件统一** | 优先用 Element Plus + 全局 css 覆盖；pane 内自定义类最小化 |
+
+## 2. 设计系统
+
+### 2.1 颜色
+
+文件：`frontend/src/styles/global.css`
+
+| Token | 用途 | 色值 |
+|---|---|---|
+| `--accent` | 按钮 / 焦点 / active / edge | `#5b4dff` |
+| `--accent-dim` | hover | `#4a3fcf` |
+| `--accent-glow` | 卡片 hover / tag 背景 | `rgba(91,77,255,.10)` |
+| `--accent-glow-strong` | 重要强调 | `rgba(91,77,255,.18)` |
+| `--accent-soft` | 行 hover | `rgba(91,77,255,.06)` |
+| `--bg-primary` | 纯白底 | `#fff` |
+| `--bg-wash` | admin 灰底 | `#f6f8fb` |
+| `--border` | 通用描边 | `#e4e8ef` |
+| `--text-primary` | 主文本 | `#0f172a` |
+| `--text-secondary` | 次要文本 | `#334155` |
+| `--text-muted` | 占位 / caption | `#677389` |
+| `--success` | 成功 | `#15b359` |
+| `--danger` | 错误 | `#e03158` |
+| `--warning` | 警告 | `#b45309` |
+
+### 2.2 字体
+
+| Token | 族 | 用途 |
+|---|---|---|
+| `--font-heading` | Syne | 标题 / 大数字 |
+| `--font-body` | Inter | 全局 UI |
+| `--font-mono` | JetBrains Mono | 代码 / URI / OTP |
+
+### 2.3 圆角
+
+```
+--radius-sm:  4px    /* tag / little */
+--radius-md:  8px    /* button / input */
+--radius-lg:  10px   /* card */
+--radius-xl:  14px   /* dialog */
+--radius-pill: 9999px /* badge / chip */
+```
+
+### 2.4 阴影
+
+```
+--shadow-sm: 0 1px 3px rgba(15,23,42,.04), 0 1px 2px rgba(15,23,42,.03);
+--shadow-md: 0 2px  6px -2px rgba(15,23,42,.08), 0  4px 12px  -4px rgba(15,23,42,.06);
+--shadow-lg: 0 24px 48px -24px rgba(15,23,42,.18), 0 12px 24px -12px rgba(15,23,42,.10);
+--shadow-xl: 0 32px 64px -24px rgba(15,23,42,.22);
+--shadow-accent: 0 0 0 4px var(--accent-glow);    /* input focus */
+```
+
+---
+
+## 3. 页面布局
+
+### 3.1 Login（左右分屏）
+
+```
+┌────────────────────┬───────────────────────────────────┐
+│  DEEP INDIGO HERO  │         GLASS CARD                │
+│                    │                                   │
+│  logo + 欢迎        │   ◉ Tab chips（密码/短信/…）      │
+│  title大标题        │   · label · el-input              │
+│  4个feature点       │   · label · el-input              │
+│  底部 trust badge   │   · el-button primary (44px)      │
+│                    │   · 底部 copyright                │
+└────────────────────┴───────────────────────────────────┘
+         50%                            50%
+             响应式 <=900px：单列（hero 上 + 卡片 下）
+```
+
+- hero 背景：`linear-gradient(135deg, #0b0d1f, #1c1e54, #26287a)`
+- logo 渐变：`linear-gradient(135deg, #5b4dff, #7f73ff)`
+- 卡片：`.glass-card`（白 + `shadow-sm`）
+- 按钮：`height: 44px; font-size: .95rem`
+
+### 3.2 Dashboard
+
+```
+┌───────────────── TOPBAR（sticky, 60px, 白底 ┐
+│  ◉ IAM 控制台            🔔 admin  👤 用户 ▼ │
+└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  KPI卡 × 3（用户数 / 角色数 / MFA覆盖率）    │
+├──────────────┬──────────────┬────────────────┤
+│ 用户信息     │ 角色         │ 权限           │
+│ accent-edge  │ tag chips    │ tag chips      │
+├──────────────┴──────────────┴────────────────┤
+│  快捷操作 (2 卡片)                            │
+└──────────────────────────────────────────────┘
+```
+
+- KPI：`StatCard.vue`（value + delta + icon + accent-edge 标识主卡）
+- 用户卡：width 25% 侧 `accent-edge`（左边 3px 渐变标识条）
+
+### 3.3 Admin
+
+```
+┌────────────┬─────────────────────────────────────────┐
+│  DARK      │  TOPBAR（白底 60px）                    │
+│  SIDEBAR   │  H2 + Breadcrumb                        │
+│  240px     ├─────────────────────────────────────────┤
+│            │  CONTENT AREA（bg-wash 灰底）           │
+│  ◉ Logo    │   ┌ PaneToolbar（搜索+新建）             │
+│  管理      │   └─────────────────────────────        │
+│   · 用户   │   ┌ el-table（rounded, striped 隐式）    │
+│   · 角色 ● │   │ … 启用/禁用/删除 │                    │
+│   · 权限   │   └──────────────────────────────        │
+│   · 客户端 │                                         │
+│   · 租户   │                                         │
+│   · 审计   │                                         │
+│   · 配置   │                                         │
+│            │                                         │
+│  ◀ 返回控制台│                                        │
+└────────────┴─────────────────────────────────────────┘
+```
+
+- sidebar 背景：`#0b0d1f`，active：`linear-gradient(90deg, rgba(91,77,255,.18), transparent) + inset 3px accent border`
+- content body 背景：`--bg-wash`
+- 表格：默认 plus `--radius-lg` overflow hidden，行分割 `--border`
+
+---
+
+## 4. 共享组件
+
+### 4.1 `PaneToolbar.vue`
+
+```html
+<PaneToolbar
+  v-model:query="tenant"
+  search-placeholder="按租户过滤..."
+  :show-search="true"
+  :show-create="true"
+  create-label="新建用户"
+  @search="load"
+  @create="showCreate = true"
+>
+  <template #action>
+    <el-button @click="showGrant = true">角色授权</el-button>
+  </template>
+</PaneToolbar>
+```
+
+视觉：
+- `el-button primary`（含 Plus 图标 + 文字）在最左
+- `#action` 自定义按钮
+- spacer 居中撑开右侧
+- `search-input` 左 radius 9999；width 240px 默认
+
+### 4.2 `StatCard.vue`
+
+```html
+<StatCard :value="128" label="用户总数" delta="+3 今天" accent>
+  <template #icon> …svg… </template>
+</StatCard>
+```
+
+- value：heading font 1.85rem bold
+- delta：pill badge（success / danger 自适应）
+- `accent` prop 加左侧渐变标识条
+
+### 4.3 `EmptyState.vue`
+
+```html
+<EmptyState title="暂无数据" description="可点击下方按钮新建">
+  <template #action>
+    <el-button type="primary" @click="openCreate">立即创建</el-button>
+  </template>
+</EmptyState>
+```
+
+### 4.4 `CallbackView.vue`
+
+```html
+<CallbackView msg="正在交换令牌..." />
+```
+
+- 8 点圆环绕动 spinner，淡入 `.animate-in`
+- 半径 + 旋转 + 透明 `--i` 差分出圆周
+
+---
+
+## 5. Element Plus 覆盖规范
+
+全局覆盖写在 `global/css`。若有 scoped 需求，必须使用 `:deep()`。
+
+覆盖范围：
+
+| 类 | 改动 |
+|---|---|
+| `.el-button--primary` | bg=`--accent`, hover bg=`--accent-dim`, translateY(-1px) on hover |
+| `.el-input__wrapper` | bg=`--card`, border=`--border`, focus border=`--accent` + box-shadow=`--shadow-accent` |
+| `.el-card` | padding 20, shadow-sm |
+| `.el-dialog` | radius `--radius-xl`, animation `scaleIn .18s` |
+| `.el-table` | row hover=`--accent-soft`, header 0.72rem uppercase letter-spacing .06em |
+| `.tab-chip` | pill + 实心 accent 激活 |
+
+---
+
+## 6. 动效体系
+
+| 名称 | 时长 | 用途 |
+|---|---|---|
+| `fadeIn` | 450ms | 页面/区块出现 |
+| `fadeInUp` | 450ms | 卡片入场 |
+| `scaleIn` | 180ms | Dialog / 卡片 hover 稍提 |
+| `translateY(-1px)` | 180ms | 按钮 hover |
+| `translateY(-2px)` | 250ms | 数据卡 hover（+ shadow-md） |
+
+---
+
+## 7. 响应式断点
+
+| 尺寸 | 适应 |
+|---|---|
+| `> 900px` | Admin 三栏 Dashboard；Login 双侧 |
+| `768 – 900px` | Admin 双栏 Dashboard；Login 双侧 |
+| `< 768px` | Admin sidebar 缩 200px；Login 单列 |
+| `< 480px` | Login 双列社交；card padding 减小 |
+
+---
+
+## 8. 避免的 Anti-Pattern
+
+| 不推荐 | 替代 |
+|---|---|
+| 在 pane 里重新写 `.neo-btn` 系列 | `el-button` + 全局 css |
+| 跳过 `StatCard / PaneToolbar` 直接写标签 | 复用公共组件 |
+| 多层 `.el-form-item` label-inline 导致对齐问题 | 用堆叠 label（label 占一行 + input 单独一行） |
+| 自写 spinner / loading 动画 | 用 `CallbackView.vue` 或 `v-loading` |
+| hover 加过重阴影（超过 shadow-md） | 留 xl 给 dialog |
+| 随机 hex 颜色 | 全部走设计 token |
+
+---
+
+## 9. 颜色和字体一致性清单
+
+- [ ] 所有品牌 accent 用 `#5b4dff`（`--accent`），不要再用 `#533afd`
+- [ ] 字号 `html { font-size: 14.5px }` 已同步调整
+- [ ] body 背景默认 `#fff`；admin-bg `--bg-wash`
+- [ ] 不要写 dead color; 用 `--text-muted` (占位) / `--text-secondary` (次要标签) / `--text-primary` (主信息)
+- [ ] 按钮圆角 8；卡片 10；弹窗 14

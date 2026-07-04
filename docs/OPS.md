@@ -1,6 +1,6 @@
 # IAM Platform — 操作手册
 
-> 版本：1.0.0 · 更新：2026-06-30
+> 版本：1.1.0 · 更新：2026-07-04
 
 ## 1. 环境准备
 
@@ -125,7 +125,7 @@ Windows PowerShell：
 | 前端 | http://localhost:5173 | 登录页 + 管理控制台 |
 | Auth Server | http://localhost:8080/iam | 运行态 API |
 | Admin Server | http://localhost:8081/iam | 管理态 API |
-| H2 dev 数据 | `~/iam-dev/iam.*` | dev profile 文件库（AUTO_SERVER 共享） |
+| H2 dev 数据 | `~/iam-dev/iam.*`（Linux/Mac）或 `%USERPROFILE%\iam-dev\iam.*`（Windows） | dev profile 文件库（AUTO_SERVER 共享） |
 | MySQL | localhost:3306 | db=iam user=iam pwd=iam123 |
 | Redis | localhost:6379 | 无密码 |
 | 健康检查 | http://localhost:8080/iam/actuator/health | auth-server |
@@ -313,7 +313,51 @@ curl -X POST http://localhost:8080/iam/oauth/introspect \
 - 回滚：Liquibase `rollback` + git checkout 旧代码 + 重启。
 - 蓝绿：两套 docker-compose stack，切 nginx upstream。
 
-## 11. 安全 checklist（上线前）
+## 11. Windows 开发实战
+
+### 11.1 一键脚本命令速查
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # 仅首次
+.\scripts\dev.ps1        # 启动 dev（redis + backend + vite）
+.\scripts\start.ps1      # 生产 docker compose
+.\scripts\stop.ps1       # 停止全部
+.\scripts\build.ps1      # 仅构建，不启动
+```
+
+### 11.2 常见问题
+
+**Q：`vite dev` 起不来？**
+A：确认已 `cd frontend && npm i`。确认 Node.js ≥ 20（`node -v`）。
+
+**Q：后端报 `H2 database not found`？**
+A：删 `%USERPROFILE%\iam-dev\` 后重启，脚本会自动播种。
+
+**Q：前端白屏，浏览器控制台报 `hasRole is not a function`？**
+A：`npm run dev` 需要和 backend 同起（`~\scripts\dev.ps1`），否则 `/iam/admin/*` 反向代理找不到 admin 服务。
+
+**Q：改了 `global.css`，浏览器没生效？**  
+A：Ctrl+Shift+R 强刷。Vite HMR 会导入 CSS，但若 swiched 过 `.ps1` 脚本重启，需要清浏览器缓存。
+
+### 11.3 前端设计系统速查
+
+```
+公共变量在 frontend/src/styles/global.css
+├── --accent: #5b4dff        主按钮 / 焦点 / active
+├── --accent-dim: #4a3fcf     hover
+├── --bg-wash: #f6f8fb        admin 灰
+├── --border: #e4e8ef
+├── --shadow-sm|md|lg|xl     四档投影
+└── --radius-sm|md|lg|xl|pill
+
+公共组件：
+├── PaneToolbar.vue   搜索 + 新建 + action 插槽（panes 共用）
+├── StatCard.vue      KPI 数卡（DashboardView）
+├── EmptyState.vue    空状态
+└── CallbackView.vue  回调等待页（8 点圆环绕动 spinner）
+```
+
+## 12. 安全 checklist（上线前）
 
 - [ ] `IAM_JWT_SECRET` 已改成 ≥32 字节随机值，两服务相同
 - [ ] `DB_PASS` / `REDIS_PASS` 已改非默认

@@ -171,7 +171,9 @@ public class AdminAppService {
 
     @Transactional
     public void grantPermission(String roleCode, String permCode) {
-        rolePermRepo.save(RolePermissionEntity.builder().roleCode(roleCode).permCode(permCode).build());
+        if (rolePermRepo.findByRoleCode(roleCode).stream().noneMatch(rp -> rp.getPermCode().equals(permCode))) {
+            rolePermRepo.save(RolePermissionEntity.builder().roleCode(roleCode).permCode(permCode).build());
+        }
     }
 
     @Transactional
@@ -179,6 +181,12 @@ public class AdminAppService {
         rolePermRepo.findByRoleCode(roleCode).stream()
                 .filter(rp -> rp.getPermCode().equals(permCode))
                 .forEach(rolePermRepo::delete);
+    }
+
+    public List<String> listRolePermissions(String roleCode) {
+        return rolePermRepo.findByRoleCode(roleCode).stream()
+                .map(RolePermissionEntity::getPermCode)
+                .collect(Collectors.toList());
     }
 
     // ---------- tenants ----------
