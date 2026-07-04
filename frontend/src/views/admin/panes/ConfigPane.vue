@@ -98,8 +98,23 @@ const protocols = [
   color: var(--accent);
   font-size: 0.88rem;
 }
-.protocol-detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
-.protocol-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; }
+.protocol-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  /* 限制单行文字不会把卡片撑到和旁边卡片紧贴 */
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.protocol-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;     /* flex 子项默认 min-width:auto 会阻止文字收缩 */
+}
+.config-grid .config-item { min-width: 0; }
 .hint { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--text-muted); font-size: 0.78rem; }
 .inline-pre { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap; }
 </style>

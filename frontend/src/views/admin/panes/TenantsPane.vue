@@ -59,10 +59,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type TenantRow } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
 
+const DEFAULT_FORM = () => ({ code: '', name: '', isolationMode: 'SHARED', schemaName: '', ldapUrl: '', ldapBase: '', enabled: true })
+
 const rows = ref<TenantRow[]>([])
 const loading = ref(false)
 const showEdit = ref(false)
-const form = ref({ code: '', name: '', isolationMode: 'SHARED', schemaName: '', ldapUrl: '', ldapBase: '', enabled: true })
+const form = ref(DEFAULT_FORM())
 
 async function load(): Promise<void> {
   loading.value = true
@@ -72,21 +74,32 @@ function onEdit(row: TenantRow | null): void {
   if (row) {
     form.value = { code: row.code, name: row.name, isolationMode: row.isolationMode, schemaName: row.schemaName, ldapUrl: row.ldapUrl || '', ldapBase: row.ldapBase || '', enabled: row.enabled }
   } else {
-    form.value = { code: '', name: '', isolationMode: 'SHARED', schemaName: '', ldapUrl: '', ldapBase: '', enabled: true }
+    form.value = DEFAULT_FORM()
   }
   showEdit.value = true
 }
 async function onSave(): Promise<void> {
-  await adminApi.upsertTenant(form.value)
-  ElMessage.success('已保存')
-  showEdit.value = false
-  await load()
+  if (!form.value.code.trim()) { ElMessage.warning('请输入租户编码'); return }
+  try {
+    await adminApi.upsertTenant(form.value)
+    ElMessage.success('已保存')
+    form.value = DEFAULT_FORM()
+    showEdit.value = false
+    await load()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '保存失败（编码可能已存在）')
+  }
 }
 async function onDelete(row: TenantRow): Promise<void> {
-  await ElMessageBox.confirm(`删除租户 ${row.code}?`, '确认', { type: 'warning' })
-  await adminApi.deleteTenant(row.code)
-  ElMessage.success('已删除')
-  await load()
+  if (!row?.code) { ElMessage.warning('租户数据异常，请刷新列表'); return }
+  await ElMessageBox.confirm(`删除租户 ${row.code}?`, '确认删除', { type: 'warning' })
+  try {
+    await adminApi.deleteTenant(row.code)
+    ElMessage.success('已删除')
+    await load()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '删除失败（租户下可能仍有用户）')
+  }
 }
 onMounted(load)
 </script>

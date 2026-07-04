@@ -142,7 +142,7 @@ async function saveRoles(): Promise<void> {
 async function onReset(row: UserRow): Promise<void> {
   const { value } = await ElMessageBox.prompt('新密码', '重置密码', { inputType: 'password' })
   await adminApi.resetPassword(row.id, value)
-  ElMessage.success('已重置')
+  if (!value) return
 }
 
 async function onToggle(row: UserRow): Promise<void> {
@@ -152,14 +152,12 @@ async function onToggle(row: UserRow): Promise<void> {
 
 async function onUnlock(row: UserRow): Promise<void> {
   await adminApi.unlockUser(row.id)
-  ElMessage.success('已解锁')
   await load()
 }
 
 async function onDelete(row: UserRow): Promise<void> {
-  await ElMessageBox.confirm(`删除 ${row.username}?`, '确认', { type: 'warning' })
+  await ElMessageBox.confirm(`删除 ${row.username}?`, '确认删除', { type: 'warning' })
   await adminApi.deleteUser(row.id)
-  ElMessage.success('已删除')
   await load()
 }
 

@@ -8,6 +8,12 @@ http.interceptors.request.use(cfg => {
   return cfg
 })
 
+// 全局错误处理：
+// 1) 401 → 清 token 跳 /login
+// 2) 4xx/5xx 且后端返回 { message: ... } → 自动 toast（前端业务代码可不再 catch）
+// 3) 网络错误 → 自动 toast
+// 注意：业务代码仍可通过 try/catch 拿到 err 做额外处理（如表单校验）
+let lastToastAt = 0
 http.interceptors.response.use(
   r => r,
   err => {
@@ -15,6 +21,18 @@ http.interceptors.response.use(
       localStorage.removeItem('access_token')
       localStorage.removeItem('roles')
       if (!location.pathname.startsWith('/login')) location.href = '/login'
+      return Promise.reject(err)
+    }
+    // 节流：1 秒内不重复 toast
+    const now = Date.now()
+    if (now - lastToastAt > 1000) {
+      lastToastAt = now
+      const msg = err.response?.data?.message
+        || err.response?.data?.error
+        || err.message
+        || '请求失败'
+      // 动态 import 避免循环依赖
+      import('element-plus').then(m => m.ElMessage?.error?.(`操作失败：${msg}`))
     }
     return Promise.reject(err)
   }
