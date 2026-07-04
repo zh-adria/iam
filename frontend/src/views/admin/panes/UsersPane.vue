@@ -26,13 +26,14 @@
           <span v-if="!row.roles?.length" class="no-data">未分配</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="360" fixed="right">
+      <!-- 操作列：用 min-width 替代固定宽度，避免水平滚动时和滚动条重叠 -->
+      <el-table-column label="操作" min-width="340" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openAssignRoles(row)">角色分配</el-button>
-          <el-button link size="small" @click="onReset(row)">重置密码</el-button>
-          <el-button link size="small" @click="onToggle(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
-          <el-button link size="small" :disabled="row.status !== 2" @click="onUnlock(row)">解锁</el-button>
-          <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          <el-button type="primary" size="small" plain @click="openAssignRoles(row)">角色分配</el-button>
+          <el-button size="small" plain @click="onReset(row)">重置密码</el-button>
+          <el-button size="small" plain @click="onToggle(row)">{{ row.status === 1 ? '禁用' : '启用' }}</el-button>
+          <el-button size="small" plain :disabled="row.status !== 2" @click="onUnlock(row)">解锁</el-button>
+          <el-button type="danger" size="small" plain @click="onDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -53,6 +54,18 @@
     </el-dialog>
 
     <!-- Assign Roles Dialog -->
+    <!-- 分页 -->
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
+    </div>
+
     <el-dialog v-model="showAssignRoles" :title="`分配角色 — ${editingRow?.username || ''}`" width="460px">
       <el-form label-width="60px">
         <el-form-item label="角色">
@@ -73,16 +86,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type UserRow, type RoleRow } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
+import { usePagination } from '../../../composables/usePagination'
 
-const rows = ref<UserRow[]>([])
+const allRows = ref<UserRow[]>([])
 const loading = ref(false)
 const tenant = ref('')
 const showCreate = ref(false)
 const form = ref({ username: '', password: '', email: '', phone: '', tenantCode: 'default' })
+
+const { page, size, rows, total, reset } = usePagination(allRows)
 
 const availableRoles = ref<RoleRow[]>([])
 const showAssignRoles = ref(false)
@@ -92,9 +108,14 @@ const saving = ref(false)
 
 async function load(): Promise<void> {
   loading.value = true
-  try { rows.value = (await adminApi.listUsers(1, 50, tenant.value || undefined)).rows }
-  finally { loading.value = false }
+  try {
+    allRows.value = (await adminApi.listUsers(1, 100, tenant.value || undefined)).rows
+    reset()
+  } finally { loading.value = false }
 }
+
+// 租户过滤变化时回到第 1 页
+watch(tenant, () => load())
 
 async function loadAvailableRoles(): Promise<void> {
   if (availableRoles.value.length === 0) {
@@ -163,3 +184,11 @@ async function onDelete(row: UserRow): Promise<void> {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+</style>

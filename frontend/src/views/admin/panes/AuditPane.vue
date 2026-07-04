@@ -21,24 +21,46 @@
       <el-table-column prop="occurredAt" label="时间" width="170" />
       <el-table-column prop="prevHash" label="前序哈希" min-width="120" show-overflow-tooltip />
     </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { adminApi } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
+import { usePagination } from '../../../composables/usePagination'
 
-const rows = ref<any[]>([])
+const allRows = ref<any[]>([])
 const loading = ref(false)
 const userFilter = ref('')
+
+const { page, size, rows, total, reset } = usePagination(allRows)
 
 async function load(): Promise<void> {
   loading.value = true
   try {
     const userId = userFilter.value ? Number(userFilter.value) : undefined
-    rows.value = (await adminApi.listAudit(1, 50, userId)).rows
+    allRows.value = (await adminApi.listAudit(1, 100, userId)).rows
+    reset()
   } finally { loading.value = false }
 }
+
+watch(userFilter, () => load())
+
 onMounted(load)
 </script>
+
+<style scoped>
+.pager { display: flex; justify-content: flex-end; margin-top: 16px; }
+</style>

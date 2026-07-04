@@ -23,6 +23,17 @@
       </el-table-column>
     </el-table>
 
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
+    </div>
+
     <el-dialog v-model="showEdit" :title="exist ? '编辑客户端' : '新建客户端'" width="500px">
       <el-form :model="form" label-width="100px">
         <el-form-item label="Client ID">
@@ -61,8 +72,9 @@ import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type ClientRow } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
+import { usePagination } from '../../../composables/usePagination'
 
-const rows = ref<ClientRow[]>([])
+const allRows = ref<ClientRow[]>([])
 const loading = ref(false)
 const showEdit = ref(false)
 const exist = ref(false)
@@ -77,13 +89,18 @@ const form = reactive({
 
 const DEFAULT_ITEM = () => ({ _origClientId: '', clientId: '', clientSecret: '', grantTypesArr: [] as string[], redirectUris: '', scopes: '' })
 
+const { page, size, rows, total, reset } = usePagination(allRows)
+
 function resetForm() {
   Object.assign(form, DEFAULT_ITEM())
 }
 
 async function load(): Promise<void> {
   loading.value = true
-  try { rows.value = await adminApi.listClients() } finally { loading.value = false }
+  try {
+    allRows.value = await adminApi.listClients()
+    reset()
+  } finally { loading.value = false }
 }
 function onEdit(row: ClientRow | null): void {
   resetForm()
@@ -122,4 +139,5 @@ onMounted(load)
 
 <style scoped>
 .field-tip { font-size: .72rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+.pager { display: flex; justify-content: flex-end; margin-top: 16px; }
 </style>

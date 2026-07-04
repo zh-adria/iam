@@ -28,6 +28,17 @@
       </el-table-column>
     </el-table>
 
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
+    </div>
+
     <!-- Create Dialog -->
     <el-dialog v-model="showCreate" title="新建角色" width="420px">
       <el-form :model="form" label-width="80px">
@@ -86,13 +97,16 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type RoleRow, type PermRow } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
+import { usePagination } from '../../../composables/usePagination'
 
-const rows = ref<RoleRow[]>([])
+const allRows = ref<RoleRow[]>([])
 const allPerms = ref<PermRow[]>([])
 const rolePerms = ref<Record<string, string[]>>({})
 const loading = ref(false)
 const showCreate = ref(false)
 const form = ref({ code: '', name: '', tenantCode: 'default' })
+
+const { page, size, rows, total, reset: resetPage } = usePagination(allRows)
 
 const showManagePerms = ref(false)
 const editingRole = ref<RoleRow | null>(null)
@@ -110,9 +124,9 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     const [roleRes, permRes] = await Promise.all([adminApi.listRoles(), adminApi.listPermissions()])
-    rows.value = roleRes
+    allRows.value = roleRes
     allPerms.value = permRes
-    // load per-role permissions
+    resetPage()
     const entries = await Promise.all(
       roleRes.map(async r => [r.code, await adminApi.listRolePermissions(r.code)] as const)
     )
@@ -170,6 +184,7 @@ onMounted(load)
 </script>
 
 <style scoped>
+.pager { display: flex; justify-content: flex-end; margin-top: 16px; }
 .hint { font-size: .78rem; color: var(--text-muted); }
 .hint b { color: var(--accent); font-weight: 600; }
 .no-data { color: var(--text-muted); font-size: .82rem; padding: 8px 0; }

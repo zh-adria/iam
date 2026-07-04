@@ -29,6 +29,17 @@
       </el-table-column>
     </el-table>
 
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
+    </div>
+
     <el-dialog v-model="showEdit" title="租户配置" width="480px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="编码"><el-input v-model="form.code" placeholder="tenant-code" /></el-form-item>
@@ -58,17 +69,23 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type TenantRow } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
+import { usePagination } from '../../../composables/usePagination'
 
 const DEFAULT_FORM = () => ({ code: '', name: '', isolationMode: 'SHARED', schemaName: '', ldapUrl: '', ldapBase: '', enabled: true })
 
-const rows = ref<TenantRow[]>([])
+const allRows = ref<TenantRow[]>([])
 const loading = ref(false)
 const showEdit = ref(false)
 const form = ref(DEFAULT_FORM())
 
+const { page, size, rows, total, reset } = usePagination(allRows)
+
 async function load(): Promise<void> {
   loading.value = true
-  try { rows.value = await adminApi.listTenants() } finally { loading.value = false }
+  try {
+    allRows.value = await adminApi.listTenants()
+    reset()
+  } finally { loading.value = false }
 }
 function onEdit(row: TenantRow | null): void {
   if (row) {
@@ -103,3 +120,7 @@ async function onDelete(row: TenantRow): Promise<void> {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+.pager { display: flex; justify-content: flex-end; margin-top: 16px; }
+</style>

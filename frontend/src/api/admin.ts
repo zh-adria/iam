@@ -92,6 +92,10 @@ export const adminApi = {
     const { data } = await http.get('/roles', { params: { tenant } })
     return data.data
   },
+  async listRolesPaged(page = 1, size = 20, tenant?: string): Promise<Page<RoleRow>> {
+    const { data } = await http.get('/roles', { params: { page, size, tenant } })
+    return data.data
+  },
   async createRole(code: string, name: string, tenantCode?: string): Promise<void> {
     await http.post('/roles', { code, name, tenantCode })
   },
