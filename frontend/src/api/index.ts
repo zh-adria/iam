@@ -11,7 +11,9 @@ export interface LoginResp {
   permissions?: string[]
 }
 
-const http = axios.create({ baseURL: '/iam/api' })
+// 后端 Spring Security 在部分场景（未认证、SAML 跳转）会返回 302 重定向。
+// 让浏览器/XHR 不顺从，直接暴露真实 status code，便于排查显示错误提示。
+const http = axios.create({ baseURL: '/iam/api', maxRedirects: 0 })
 
 http.interceptors.request.use(cfg => {
   const t = localStorage.getItem('access_token')

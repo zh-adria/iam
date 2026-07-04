@@ -214,7 +214,13 @@ async function onLogin(): Promise<void> {
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '登录失败')
+    // 后端可能返回 JSON { message: "服务异常" } 或 HTML white-label page — 兼容取 message
+    const data = e.response?.data
+    const msg = (data && typeof data === 'object' && data.message)
+      ? data.message
+      : (e.response?.status === 302 ? '后端异常重定向 (302)，请检查后端日志' : '登录失败')
+    ElMessage.error(msg)
+    console.error('[login]', e.response?.status, data, e)
   } finally {
     loading.value = false
   }
@@ -240,7 +246,9 @@ async function onSmsLogin(): Promise<void> {
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '登录失败')
+    const data = e.response?.data
+    const msg = (data && typeof data === 'object' && data.message) ? data.message : '登录失败'
+    ElMessage.error(msg)
   } finally { loading.value = false }
 }
 

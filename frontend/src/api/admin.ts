@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const http = axios.create({ baseURL: '/iam/admin/api' })
+const http = axios.create({ baseURL: '/iam/admin/api', maxRedirects: 0 })
 
 http.interceptors.request.use(cfg => {
   const t = localStorage.getItem('access_token')
