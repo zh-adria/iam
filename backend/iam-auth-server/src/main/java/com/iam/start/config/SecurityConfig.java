@@ -47,6 +47,7 @@ public class SecurityConfig {
                 // Do NOT prefix them with /iam — that path never reaches the
                 // security matcher and would fall through to authenticated().
                 .antMatchers(
+                    // ---------- 鉴权入口（permitAll 才会流转到 Controller） ----------
                     "/api/auth/login",
                     "/api/auth/refresh",
                     "/api/auth/mfa/verify",
@@ -55,19 +56,21 @@ public class SecurityConfig {
                     "/api/auth/magic/**",
                     "/api/auth/social/**",
                     "/api/auth/cas/**",
-                    "/api/users/register",
+                    "/api/users/**",                     // 用户自服务（注册/MFA）
                     "/actuator/health",
+                    // ---------- OAuth2 / OIDC ----------
                     "/oauth/token",
                     "/oauth/.well-known/**",
                     "/oauth/jwks",
                     "/oauth/userinfo",
                     "/oauth/introspect",
                     "/oauth/revoke",
-                    "/login/oauth2/**",
-                    "/login/saml2/**",
+                    // ---------- 所有登录页面端点（避免 SAML / OAuth2 登录 filter 未匹配时 302） ----------
+                    "/login/**",
                     "/saml2/**",
                     "/saml/metadata/**",
-                    "/cas/**"
+                    "/cas/**",
+                    "/error"
                 ).permitAll()
                 .antMatchers("/oauth/authorize").authenticated()
                 .anyRequest().authenticated()

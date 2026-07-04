@@ -50,10 +50,15 @@
     </dependencies>
 
     <build>
+        <finalName>iam-auth-server</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!-- 输出到独立目录，避免 repackage 阶段 rename 已运行 jar 被 JVM 锁住 -->
+                    <outputDirectory>${project.build.directory}/boot</outputDirectory>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

@@ -39,10 +39,14 @@
     </dependencies>
 
     <build>
+        <finalName>iam-admin</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <outputDirectory>${project.build.directory}/boot</outputDirectory>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

@@ -60,7 +60,14 @@ const flatCfg = computed(() => {
   return rest
 })
 
-onMounted(async () => { config.value = await adminApi.config() })
+onMounted(async () => {
+  try {
+    config.value = await adminApi.config()
+  } catch (e: any) {
+    const msg = e.response?.data?.message || e.message || ''
+    config.value = { note: `配置加载失败：${msg || '请检查 IAM Admin 是否拿到 ROLE_ADMIN 权限并重启'}` }
+  }
+})
 
 const protocols = [
   { name: 'OAuth2 授权服务器', detail: '/oauth/{authorize,token,userinfo,introspect,revoke,jwks,.well-known}' },

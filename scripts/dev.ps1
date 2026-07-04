@@ -122,7 +122,7 @@ New-Item -ItemType Directory -Force -Path logs | Out-Null
 
 Write-Host "[3/4] starting iam-auth-server (8080) - dev profile"
 $auth = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
-  -ArgumentList '-jar','backend\iam-auth-server\target\iam-auth-server-1.0.0-SNAPSHOT.jar','--spring.profiles.active=dev' `
+  -ArgumentList '-jar','backend\iam-auth-server\target\boot\iam-auth-server.jar','--spring.profiles.active=dev' `
   -RedirectStandardOutput 'logs\auth-server.log' `
   -RedirectStandardError  'logs\auth-server.err.log' `
   -PassThru -WindowStyle Hidden
@@ -138,7 +138,7 @@ if (-not (Wait-Until {
 
 Write-Host "      starting iam-admin (8081)"
 $admin = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
-  -ArgumentList '-jar','backend\iam-admin\target\iam-admin-1.0.0-SNAPSHOT.jar','--spring.profiles.active=dev' `
+  -ArgumentList '-jar','backend\iam-admin\target\boot\iam-admin.jar','--spring.profiles.active=dev' `
   -RedirectStandardOutput 'logs\admin.log' `
   -RedirectStandardError  'logs\admin.err.log' `
   -PassThru -WindowStyle Hidden
