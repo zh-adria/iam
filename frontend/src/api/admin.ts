@@ -58,6 +58,8 @@ export interface PermRow { code: string; type: string; name: string; resource: s
 export interface TenantRow { id: number; code: string; name: string; isolationMode: string; schemaName: string; ldapUrl: string; ldapBase: string; enabled: boolean }
 export interface ClientRow { clientId: string; grantTypes: string; redirectUris: string; scopes: string; createdAt: string }
 export interface AuditRow { id: number; userId: number; tenant: string; action: string; result: string; principal: string; ip: string; detail: string; occurredAt: string; prevHash: string }
+export interface ConfigItem { key: string; value: string; type: string; description?: string }
+export interface ConfigResponse { items: ConfigItem[] }
 
 export const adminApi = {
   // users
@@ -149,8 +151,11 @@ export const adminApi = {
     return data.data
   },
   // config
-  async config(): Promise<Record<string, unknown>> {
+  async config(): Promise<ConfigResponse> {
     const { data } = await http.get('/config')
     return data.data
+  },
+  async updateConfig(item: ConfigItem): Promise<void> {
+    await http.put('/config', item)
   }
 }

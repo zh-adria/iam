@@ -361,11 +361,12 @@ cd frontend && npm run build    # 产出 dist/
 
 ## 文档索引
 
-- [PRD.md](./docs/PRD.md)             产品需求手册
-- [TECH.md](./docs/TECH.md)            技术手册（架构、模块）
-- [PROTOCOLS.md](./docs/PROTOCOLS.md) 13 种认证协议操作手册（curl 示例）
-- [OPS.md](./docs/OPS.md)            部署 / 配置 / 故障排查
-- [DEBT.md](./docs/DEBT.md)          已知简化与升级路径
+- [产品需求手册](./docs/产品需求手册.md)
+- [设计手册](./docs/设计手册.md)
+- [技术手册](./docs/技术手册.md)            技术手册（架构、模块）
+- [协议手册](./docs/协议手册.md) 13 种认证协议操作手册（curl 示例）
+- [操作手册](./docs/操作手册.md)            部署 / 配置 / 故障排查
+- [技术债务](./docs/技术债务.md)          已知简化与升级路径
 
 ## 升级路径
 

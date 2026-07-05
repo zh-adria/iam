@@ -2,6 +2,7 @@ package com.iam.start;
 
 import com.iam.app.service.OAuth2ClientAppService;
 import com.iam.app.service.UserAppService;
+import com.iam.infrastructure.config.DynamicConfig;
 import com.iam.infrastructure.entity.*;
 import com.iam.infrastructure.repository.*;
 import com.iam.infrastructure.security.PasswordHasher;
@@ -11,6 +12,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -35,6 +37,7 @@ public class DemoSeeder implements CommandLineRunner {
     private final RolePermissionRepository rolePerms;
     private final OAuth2ClientRepository clients;
     private final PasswordHasher hasher;
+    private final DynamicConfig dynamicConfig;
 
     @Override
     public void run(String... args) {
@@ -86,6 +89,21 @@ public class DemoSeeder implements CommandLineRunner {
                     .scopes("openid,profile")
                     .build());
         }
+
+        // ponytail: seed default dynamic config for admin UI. drop-first clears table each dev start.
+        dynamicConfig.seedIfAbsent(List.of(
+                new DynamicConfig.ConfigValueSpec("iam.social.qq.app-id", "string", "", "QQ 开放平台 App ID"),
+                new DynamicConfig.ConfigValueSpec("iam.social.qq.app-secret", "secret", "", "QQ 开放平台 App Secret"),
+                new DynamicConfig.ConfigValueSpec("iam.social.wechat.app-id", "string", "", "微信 App ID"),
+                new DynamicConfig.ConfigValueSpec("iam.social.wechat.app-secret", "secret", "", "微信 App Secret"),
+                new DynamicConfig.ConfigValueSpec("iam.sms.provider", "string", "stub", "短信服务商: stub/aliyun/tencent"),
+                new DynamicConfig.ConfigValueSpec("iam.magic-link.provider", "string", "stub", "Magic Link 服务商: stub/sendgrid"),
+                new DynamicConfig.ConfigValueSpec("iam.ratelimit.login-per-minute", "int", "10", "登录频率限制(次/分钟)"),
+                new DynamicConfig.ConfigValueSpec("iam.jwt.access-ttl-minutes", "int", "30", "Access Token 有效期(分钟)"),
+                new DynamicConfig.ConfigValueSpec("iam.password.max-fail-count", "int", "5", "密码最大失败次数"),
+                new DynamicConfig.ConfigValueSpec("iam.password.lock-minutes", "int", "30", "账户锁定时长(分钟)")
+        ));
+
         log.info("demo seed complete: admin/Iam@2026, alice/User@2026, client=demo-client/demo-secret");
     }
 

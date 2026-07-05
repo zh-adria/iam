@@ -171,11 +171,13 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { api, saveSession } from '../api'
 
 const tab = ref('password')
 const loading = ref(false)
 const router = useRouter()
+const route = useRoute()
 const form = ref({ tenantCode: 'default', username: '', password: '' })
 const smsForm = ref({ phone: '', code: '' })
 const magicEmail = ref('')
@@ -212,6 +214,11 @@ async function onLogin(): Promise<void> {
     }
     saveSession(r)
     ElMessage.success('登录成功')
+    const returnTo = route.query.return_to as string | undefined
+    if (returnTo?.startsWith('/iam/')) {
+      location.href = returnTo
+      return
+    }
     router.push('/dashboard')
   } catch (e: any) {
     // 后端可能返回 JSON { message: "服务异常" } 或 HTML white-label page — 兼容取 message

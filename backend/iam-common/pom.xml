@@ -90,6 +90,12 @@
             <artifactId>java-otp</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>me.zhyd.oauth</groupId>
+            <artifactId>JustAuth</artifactId>
+            <version>1.16.7</version>
+        </dependency>
+
         <!-- Aliyun SMS SDK (Dysmsapi 2017-05-25) — optional, only when iam.sms.provider=aliyun -->
         <dependency>
             <groupId>com.aliyun</groupId>

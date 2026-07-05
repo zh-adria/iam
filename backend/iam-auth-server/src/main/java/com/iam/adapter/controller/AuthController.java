@@ -27,12 +27,14 @@ public class AuthController {
     private final com.iam.app.service.CasAuthService cas;
 
     @PostMapping("/login")
-    public ApiResult<TokenResponse> login(@RequestBody LoginCommand cmd, HttpServletRequest req) {
+    public ApiResult<TokenResponse> login(@RequestBody LoginCommand cmd, HttpServletRequest req, HttpServletResponse res) {
         cmd.setIp(clientIp(req));
         cmd.setUserAgent(req.getHeader("User-Agent"));
         if (cmd.getClientId() == null) cmd.setClientId("iam-self");
         if (cmd.getGrantType() == null) cmd.setGrantType("password");
-        return ApiResult.ok(auth.login(cmd));
+        TokenResponse token = auth.login(cmd);
+        setAccessCookie(res, token.getAccessToken(), token.getExpiresIn());
+        return ApiResult.ok(token);
     }
 
     @PostMapping("/mfa/verify")
@@ -46,8 +48,11 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ApiResult<Void> logout(@RequestHeader("Authorization") String authz, HttpServletRequest req) {
+    public ApiResult<Void> logout(@RequestHeader("Authorization") String authz,
+                                  HttpServletRequest req,
+                                  HttpServletResponse res) {
         auth.logout(authz.substring(7), clientIp(req));
+        clearAccessCookie(res);
         return ApiResult.ok(null, "已登出");
     }
 
@@ -121,5 +126,17 @@ public class AuthController {
         String xff = req.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isEmpty()) return xff.split(",")[0].trim();
         return req.getRemoteAddr();
+    }
+
+    private void setAccessCookie(HttpServletResponse res, String token, long maxAgeSeconds) {
+        res.addHeader("Set-Cookie", "IAM_ACCESS_TOKEN=" + token
+                + "; Max-Age=" + maxAgeSeconds
+                + "; Path=/iam; HttpOnly; SameSite=Lax");
+    }
+
+    private void clearAccessCookie(HttpServletResponse res) {
+        if (res != null) {
+            res.addHeader("Set-Cookie", "IAM_ACCESS_TOKEN=; Max-Age=0; Path=/iam; HttpOnly; SameSite=Lax");
+        }
     }
 }

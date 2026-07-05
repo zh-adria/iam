@@ -1,120 +1,104 @@
 <template>
-  <div v-loading="loading">
-    <div class="config-summary">
-      <div class="config-header">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-        <div>
-          <h3>系统配置</h3>
-          <p class="section-desc">认证协议在 <code>application.yml</code> 中配置，需重启生效</p>
-        </div>
-      </div>
+  <div>
+    <PaneToolbar
+      v-model:query="query"
+      search-placeholder="搜索配置 key..."
+      :show-search="true"
+      :show-create="false"
+      @search="page = 1"
+    />
 
-      <div v-if="config.note" class="config-note">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        <span>{{ config.note }}</span>
-      </div>
+    <el-table :data="rows" v-loading="loading" style="width:100%">
+      <el-table-column prop="key" label="配置项" min-width="260" />
+      <el-table-column prop="type" label="类型" width="100">
+        <template #default="{ row }">
+          <span :class="['neo-tag', row.type === 'secret' ? 'danger' : 'accent']">{{ row.type }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="值" min-width="300">
+        <template #default="{ row }">
+          <el-input
+            v-model="drafts[row.key]"
+            :type="row.type === 'secret' && !visibleSecrets[row.key] ? 'password' : 'text'"
+            show-password
+            placeholder="未配置"
+          />
+        </template>
+      </el-table-column>
+      <el-table-column prop="description" label="说明" min-width="220" />
+      <el-table-column label="操作" width="110" align="right">
+        <template #default="{ row }">
+          <el-button size="small" type="primary" plain :loading="savingKey === row.key" @click="save(row)">保存</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <div class="pager">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="size"
+        :page-sizes="[10, 20, 50]"
+        :total="total"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
     </div>
-
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="认证协议" name="protocol">
-        <div class="config-grid">
-          <div v-for="p in protocols" :key="p.name" class="config-item glass-card">
-            <div class="protocol-item">
-              <div>
-                <div class="config-key">{{ p.name }}</div>
-                <div class="protocol-detail">{{ p.detail }}</div>
-              </div>
-              <span class="neo-tag success">已启用</span>
-            </div>
-          </div>
-        </div>
-        <p class="hint">租户级 LDAP 配置可在「租户管理」中按租户编辑；协议开关需编辑 application.yml 后重启。</p>
-      </el-tab-pane>
-      <el-tab-pane label="全部配置" name="all">
-        <div class="config-grid">
-          <div v-for="(v, k) in flatCfg" :key="k" class="config-item glass-card">
-            <div class="config-key">{{ k }}</div>
-            <div class="config-value">
-              <span v-if="typeof v === 'boolean'">
-                <span :class="['neo-tag', v ? 'success' : 'danger']">{{ v ? 'YES' : 'NO' }}</span>
-              </span>
-              <span v-else-if="typeof v === 'object'"><pre class="inline-pre">{{ JSON.stringify(v, null, 2) }}</pre></span>
-              <span v-else>{{ v }}</span>
-            </div>
-          </div>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { adminApi } from '../../../api/admin'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { adminApi, type ConfigItem } from '../../../api/admin'
+import PaneToolbar from '../../../components/PaneToolbar.vue'
 
 const loading = ref(false)
-const config = ref<Record<string, any>>({ note: '加载中...' })
-const activeTab = ref('protocol')
-const flatCfg = computed(() => {
-  const { note, ...rest } = config.value
-  return rest
-})
+const savingKey = ref('')
+const query = ref('')
+const page = ref(1)
+const size = ref(20)
+const items = ref<ConfigItem[]>([])
+const drafts = ref<Record<string, string>>({})
+const visibleSecrets = ref<Record<string, boolean>>({})
 
-onMounted(async () => {
+const filtered = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return items.value
+  return items.value.filter(item =>
+    item.key.toLowerCase().includes(q) || (item.description || '').toLowerCase().includes(q))
+})
+const total = computed(() => filtered.value.length)
+const rows = computed(() => filtered.value.slice((page.value - 1) * size.value, page.value * size.value))
+
+async function load(): Promise<void> {
+  loading.value = true
   try {
-    config.value = await adminApi.config()
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message || ''
-    config.value = { note: `配置加载失败：${msg || '请检查 IAM Admin 是否拿到 ROLE_ADMIN 权限并重启'}` }
+    const data = await adminApi.config()
+    items.value = data.items || []
+    drafts.value = Object.fromEntries(items.value.map(item => [item.key, item.value || '']))
+  } finally {
+    loading.value = false
   }
-})
+}
 
-const protocols = [
-  { name: 'OAuth2 授权服务器', detail: '/oauth/{authorize,token,userinfo,introspect,revoke,jwks,.well-known}' },
-  { name: 'OIDC', detail: 'id_token (RS256) — JWKS 端点已公开公钥；固定密钥对用 iam.jwt.rsa-*-pem' },
-  { name: 'SAML 2.0 SP', detail: 'iam.saml.idp.metadata-url 或 entity-id/sso-url — 改后重启' },
-  { name: 'LDAP/AD', detail: 'iam.ldap.url — 空则禁用；按租户 LDAP 在租户管理配置' },
-  { name: 'CAS SSO', detail: 'iam.cas.server-url — 空则禁用' },
-  { name: '社交登录', detail: 'iam.social.{wechat,alipay,qq,dingtalk,wecom}.*' },
-  { name: '短信验证码', detail: 'iam.sms.provider=stub（控制台打印）— 接阿里云短信 SDK 替换' },
-  { name: 'Magic Link', detail: 'iam.magic-link.base-url — 邮件 sender 为 stub' },
-  { name: 'WebAuthn / FIDO2', detail: 'iam.webauthn.enabled=false — 需接入 spring-security-webauthn' },
-  { name: 'Kerberos / SPNEGO', detail: 'iam.kerberos.enabled=false — 需 JAAS + krb5.conf' },
-  { name: 'SCIM 2.0', detail: 'iam.scim.enabled=false — /scim/v2/Users 占位' },
-]
+async function save(item: ConfigItem): Promise<void> {
+  savingKey.value = item.key
+  try {
+    await adminApi.updateConfig({ ...item, value: drafts.value[item.key] || '' })
+    item.value = drafts.value[item.key] || ''
+    ElMessage.success('已保存')
+  } finally {
+    savingKey.value = ''
+  }
+}
+
+onMounted(load)
 </script>
 
 <style scoped>
-.section-desc { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
-.config-note {
+.pager {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  margin-bottom: 20px;
-  background: var(--accent-glow);
-  border: 1px solid var(--accent-glow-strong);
-  border-radius: var(--radius-md);
-  color: var(--accent);
-  font-size: 0.88rem;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
-.protocol-detail {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  /* 限制单行文字不会把卡片撑到和旁边卡片紧贴 */
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-.protocol-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;     /* flex 子项默认 min-width:auto 会阻止文字收缩 */
-}
-.config-grid .config-item { min-width: 0; }
-.hint { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--text-muted); font-size: 0.78rem; }
-.inline-pre { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; white-space: pre-wrap; }
 </style>

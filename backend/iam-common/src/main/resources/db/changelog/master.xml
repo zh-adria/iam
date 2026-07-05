@@ -144,4 +144,104 @@
         <addUniqueConstraint tableName="iam_saml_idp_registration" columnNames="tenant_code,registration_id"/>
         <createIndex indexName="idx_saml_tenant" tableName="iam_saml_idp_registration"><column name="tenant_code" type="varchar(32)"/></createIndex>
     </changeSet>
+
+    <changeSet id="003-create-system-config" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="system_config"/></not></preConditions>
+        <createTable tableName="system_config">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="cfg_key" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
+            <column name="cfg_value" type="text"><constraints nullable="false"/></column>
+            <column name="cfg_type" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="description" type="varchar(255)"/>
+            <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="004-seed-social-config" author="iam">
+        <preConditions onFail="MARK_RAN"><tableExists tableName="system_config"/></preConditions>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.redirect-base-url"/>
+            <column name="cfg_value" value="http://localhost:8080/iam/api/auth/social"/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="Social login callback base URL"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.wechat.app-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="WeChat Open Platform app id"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.wechat.app-secret"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="WeChat Open Platform app secret"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.alipay.app-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="Alipay app id"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.alipay.app-private-key"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="Alipay RSA2 app private key"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.alipay.alipay-public-key"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="Alipay RSA2 public key"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.alipay.redirect-uri"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="Alipay registered HTTPS callback URL"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.qq.app-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="QQ Connect app id"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.qq.app-key"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="QQ Connect app key"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.dingtalk.app-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="DingTalk OAuth app id"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.dingtalk.app-secret"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="DingTalk OAuth app secret"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.wecom.corp-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="WeCom corp id"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.wecom.corp-secret"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="secret"/>
+            <column name="description" value="WeCom corp secret"/>
+        </insert>
+        <insert tableName="system_config">
+            <column name="cfg_key" value="iam.social.wecom.agent-id"/>
+            <column name="cfg_value" value=""/>
+            <column name="cfg_type" value="string"/>
+            <column name="description" value="WeCom agent id"/>
+        </insert>
+    </changeSet>
 </databaseChangeLog>

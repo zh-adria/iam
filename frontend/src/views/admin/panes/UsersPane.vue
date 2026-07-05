@@ -120,7 +120,8 @@ watch(tenant, () => load())
 
 async function loadAvailableRoles(): Promise<void> {
   if (availableRoles.value.length === 0) {
-    availableRoles.value = await adminApi.listRoles()
+    const rolesPage = await adminApi.listRoles()
+    availableRoles.value = rolesPage.rows
   }
 }
 

@@ -231,4 +231,10 @@ public class AdminController {
     public ApiResult<Map<String, Object>> config() {
         return ApiResult.ok(admin.systemConfig());
     }
+
+    @PutMapping("/config")
+    public ApiResult<Void> updateConfig(@RequestBody Map<String, String> body) {
+        admin.setSystemConfig(body.get("key"), body.get("value"), body.getOrDefault("type", "string"));
+        return ApiResult.ok(null, "已保存");
+    }
 }

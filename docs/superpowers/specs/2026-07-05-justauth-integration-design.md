@@ -35,7 +35,7 @@ Keep the implementation extensible so later providers can be added by registerin
 
 ## Non-Goals
 
-This change will not introduce admin UI management for social providers.
+This change will not introduce a new social-provider admin UI. It will reuse the existing runtime configuration surface backed by the dynamic configuration table.
 
 This change will not redesign token delivery. The existing callback behavior redirects the browser to the frontend with the access token in a query parameter. That behavior is preserved for compatibility, although an HttpOnly cookie flow would be safer as a separate hardening task.
 
@@ -66,7 +66,9 @@ The service will depend on an `AuthRequest` factory instead of constructing prov
 
 ## Configuration
 
-Configuration remains under `iam.social`.
+Configuration keys remain under `iam.social`, but their persisted source of truth is the dynamic configuration table `system_config`.
+
+`JustAuthSocialAuthGateway` reads values through `DynamicConfig` and falls back to Spring `Environment` only as a bootstrap/default fallback. This keeps the existing property names compatible while aligning runtime behavior with the global dynamic-config design.
 
 Existing keys should be preserved where possible:
 
@@ -87,13 +89,11 @@ Add one base callback setting:
 
 - `iam.social.redirect-base-url`
 
-Default:
+Default dynamic-config row:
 
-```yaml
-iam:
-  social:
-    redirect-base-url: http://localhost:8080/iam/api/auth/social
-```
+| cfg_key | cfg_value | cfg_type |
+| --- | --- | --- |
+| `iam.social.redirect-base-url` | `http://localhost:8080/iam/api/auth/social` | `string` |
 
 The provider callback URL is then:
 
@@ -102,6 +102,10 @@ The provider callback URL is then:
 ```
 
 This removes hard-coded callback URLs from Java code while keeping local development behavior unchanged.
+
+Alipay additionally supports `iam.social.alipay.redirect-uri` because Alipay validates that the callback URL matches the registered HTTPS URL.
+
+Liquibase owns the table and default rows so a fresh checkout can start and run tests without manual database setup. Redis pub/sub is a best-effort cache invalidation path: if Redis is unavailable, the application still starts with DB-backed config and logs a warning.
 
 ## Provider Mapping
 
@@ -182,6 +186,8 @@ Real provider integration tests are out of scope because they require external c
 ## Dependency Scope
 
 Add JustAuth to Maven dependencies in the module that owns `SocialLoginService`. Add the HTTP implementation dependency required by the selected JustAuth setup. Versions should be pinned in the parent dependency management if shared, or directly in `iam-common` if only used there.
+
+JustAuth `1.16.7` brings `simple-http` transitively in this project, so no separate HTTP client dependency is required.
 
 ## Risks
 

@@ -11,27 +11,41 @@ import com.iam.start.DemoSeeder;
 import com.iam.start.IamAuthServerApplication;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+import javax.servlet.http.Cookie;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = IamAuthServerApplication.class)
 @ActiveProfiles("test")
+@AutoConfigureMockMvc
 class AuthFlowTest {
 
     @Autowired AuthAppService auth;
     @Autowired TotpService totp;
     @Autowired DemoSeeder seeder;
     @Autowired UserRepository userRepo;
+    @Autowired MockMvc mockMvc;
     @MockBean TokenCacheService cache;
 
     @BeforeEach void seed() {
         when(cache.tryAcquireLogin(any())).thenReturn(true);
         when(cache.isLocked(any())).thenReturn(false);
+        when(cache.isAccessValid(any())).thenReturn(true);
         seeder.run();
         // reset admin state between tests — previous test may have locked the account
         userRepo.findByUsernameAndTenantCode("admin", "default").ifPresent(u -> {
@@ -52,6 +66,35 @@ class AuthFlowTest {
         assertNotNull(r.getAccessToken());
         assertFalse(r.isMfaRequired());
         assertEquals(30 * 60L, r.getExpiresIn());
+    }
+
+    @Test
+    void passwordLogin_setsBrowserCookieForOauth2Navigation() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"Iam@2026\",\"tenantCode\":\"default\",\"clientId\":\"iam-self\",\"grantType\":\"password\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Set-Cookie", containsString("IAM_ACCESS_TOKEN=")))
+                .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
+                .andExpect(header().string("Set-Cookie", containsString("SameSite=Lax")));
+    }
+
+    @Test
+    void oauth2AuthorizeAcceptsLoginCookie() throws Exception {
+        LoginCommand cmd = LoginCommand.builder()
+                .username("admin").password("Iam@2026")
+                .tenantCode("default").clientId("iam-self")
+                .grantType("password").ip("127.0.0.1").build();
+        TokenResponse token = auth.login(cmd);
+
+        mockMvc.perform(get("/oauth/authorize")
+                        .cookie(new Cookie("IAM_ACCESS_TOKEN", token.getAccessToken()))
+                        .param("response_type", "code")
+                        .param("client_id", "demo-client")
+                        .param("redirect_uri", "http://localhost:5173/callback")
+                        .param("scope", "openid"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(header().string("Location", startsWith("http://localhost:5173/callback?code=")));
     }
 
     @Test

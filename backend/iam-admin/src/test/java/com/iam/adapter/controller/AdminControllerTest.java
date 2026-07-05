@@ -12,9 +12,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.http.MediaType;
 
 @WebMvcTest(controllers = AdminController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -46,5 +48,16 @@ class AdminControllerTest {
         mvc.perform(delete("/admin/api/tenants/"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("租户编码不能为空"));
+    }
+
+    @Test
+    void updateConfigRoutesToAdminService() throws Exception {
+        mvc.perform(put("/admin/api/config")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"key\":\"iam.social.qq.app-id\",\"value\":\"qq-client\",\"type\":\"string\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("已保存"));
+
+        verify(admin).setSystemConfig("iam.social.qq.app-id", "qq-client", "string");
     }
 }

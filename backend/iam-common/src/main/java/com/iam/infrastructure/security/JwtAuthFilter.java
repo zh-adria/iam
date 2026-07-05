@@ -12,6 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -32,9 +33,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
         try {
-            String auth = req.getHeader("Authorization");
-            if (auth != null && auth.startsWith("Bearer ")) {
-                String token = auth.substring(7);
+            String token = resolveToken(req);
+            if (token != null) {
                 Claims c = jwt.parse(token);
                 String jti = (String) c.get("jti");
                 if (jti != null && !cache.isAccessValid(jti)) {
@@ -65,5 +65,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         } finally {
             CurrentTenantHolder.clear();
         }
+    }
+
+    private String resolveToken(HttpServletRequest req) {
+        String auth = req.getHeader("Authorization");
+        if (auth != null && auth.startsWith("Bearer ")) {
+            return auth.substring(7);
+        }
+        Cookie[] cookies = req.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if ("IAM_ACCESS_TOKEN".equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }

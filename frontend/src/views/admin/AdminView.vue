@@ -53,24 +53,21 @@
               <el-icon><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></el-icon>
             </el-button>
             <div class="user-menu">
-              <el-dropdown trigger="click" @command="onUserCmd">
-                <button class="user-btn">
-                  <div class="avatar">{{ avatarText }}</div>
-                  <svg :class="['chevron', { open: dropdownOpen }]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="back">
-                      <el-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></el-icon>
-                      返回控制台
-                    </el-dropdown-item>
-                    <el-dropdown-item command="logout" divided>
-                      <el-icon><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></el-icon>
-                      登出
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <div class="user-dropdown" v-if="userMenuOpen" @mousedown.self="userMenuOpen = false">
+                <div class="menu-item" @click="onUserCmd('back')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                  返回控制台
+                </div>
+                <div class="menu-divider"></div>
+                <div class="menu-item danger" @click="onUserCmd('logout')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  登出
+                </div>
+              </div>
+              <button class="user-btn" @click.stop="userMenuOpen = !userMenuOpen" ref="userBtn">
+                <div class="avatar">{{ avatarText }}</div>
+                <svg :class="['chevron', { open: userMenuOpen }]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -97,7 +94,7 @@ import ConfigPane from './panes/ConfigPane.vue'
 
 const router = useRouter()
 const tab = ref('users')
-const dropdownOpen = ref(false)
+const userMenuOpen = ref(false)
 const username = ref('')
 
 type Cmd = 'back' | 'logout'
@@ -108,8 +105,8 @@ const onUserCmd = async (c: Cmd | string) => {
     try {
       await api.logout()
       ElMessage.success('已登出')
-      router.push('/login')
-    } catch { router.push('/login') }
+    } catch { /* ignore */ }
+    router.push('/login')
   }
 }
 
@@ -219,7 +216,7 @@ const avatarText = computed(() => (username.value || 'U').charAt(0).toUpperCase(
   letter-spacing: 0.08em;
   color: rgba(201, 195, 255, 0.32);
 }
-.nav-items { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.nav-items { flex: 1; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
 
 .nav-item {
   display: flex;
@@ -307,6 +304,38 @@ const avatarText = computed(() => (username.value || 'U').charAt(0).toUpperCase(
 }
 .chevron { transition: transform var(--dur-fast) ease; }
 .chevron.open { transform: rotate(180deg); }
+
+.user-menu { position: relative; }
+.user-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 100;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.menu-item:hover { background: var(--accent-soft); }
+.menu-item.danger { color: #f56c6c; }
+.menu-item.danger:hover { background: rgba(245, 108, 108, 0.08); }
+.menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
 .content-body {
   flex: 1;

@@ -2,6 +2,7 @@ package com.iam.app.service;
 
 import com.iam.app.dto.ApiResult;
 import com.iam.domain.AuthException;
+import com.iam.infrastructure.config.DynamicConfig;
 import com.iam.infrastructure.entity.*;
 import com.iam.infrastructure.repository.*;
 import com.iam.infrastructure.security.PasswordHasher;
@@ -38,6 +39,7 @@ public class AdminAppService {
     private final AuditLogRepository auditRepo;
     private final OAuth2ClientRepository clientRepo;
     private final SamlIdpRegistrationRepository samlRepo;
+    private final DynamicConfig dynamicConfig;
     private final PasswordHasher hasher;
 
     // ---------- users ----------
@@ -367,13 +369,13 @@ public class AdminAppService {
     }
 
     // ---------- runtime config (LDAP/SAML/Social/MFA) ----------
-    // ponytail: runtime config persisted in iam_tenant + a small config table would be ideal;
-    // for now we expose the static application.yml values via a read-only view, and tenant-level
-    // LDAP config is editable via the tenant CRUD above. System-wide SAML/Social/WebAuthn switches
-    // require a restart after editing application.yml — call out in admin UI.
     public Map<String, Object> systemConfig() {
         Map<String, Object> m = new HashMap<>();
-        m.put("note", "系统级 SAML/OAuth2-IdP/WebAuthn 配置在 application.yml，改后需重启；租户级 LDAP 在租户管理中配置");
+        m.put("items", dynamicConfig.listAll());
         return m;
+    }
+
+    public void setSystemConfig(String key, String value, String type) {
+        dynamicConfig.set(key, value == null ? "" : value, type == null || type.isBlank() ? "string" : type);
     }
 }
