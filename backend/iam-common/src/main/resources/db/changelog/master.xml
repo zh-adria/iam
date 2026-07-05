@@ -5,10 +5,10 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
 
-    <changeSet id="001-create-tables" author="iam">
-        <preConditions onFail="MARK_RAN"><not><tableExists tableName="iam_user"/></not></preConditions>
+    <changeSet id="001-create-auth-tables" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="auth_user"/></not></preConditions>
 
-        <createTable tableName="iam_tenant">
+        <createTable tableName="auth_tenant">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="code" type="varchar(32)"><constraints nullable="false" unique="true"/></column>
             <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
@@ -20,7 +20,7 @@
             <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
 
-        <createTable tableName="iam_user">
+        <createTable tableName="auth_user">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="username" type="varchar(64)"><constraints nullable="false" unique="true"/></column>
             <column name="password_hash" type="varchar(255)"><constraints nullable="false"/></column>
@@ -36,7 +36,7 @@
             <column name="updated_at" type="timestamp"/>
         </createTable>
 
-        <createTable tableName="iam_role">
+        <createTable tableName="auth_role">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="code" type="varchar(64)"><constraints nullable="false" unique="true"/></column>
             <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
@@ -44,7 +44,7 @@
             <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
 
-        <createTable tableName="iam_permission">
+        <createTable tableName="auth_permission">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="code" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
             <column name="type" type="varchar(16)"><constraints nullable="false"/></column>
@@ -55,26 +55,26 @@
             <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
 
-        <createTable tableName="iam_user_role">
+        <createTable tableName="auth_user_role">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="user_id" type="bigint"><constraints nullable="false"/></column>
             <column name="role_code" type="varchar(64)"><constraints nullable="false"/></column>
             <column name="granted_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
-        <addUniqueConstraint tableName="iam_user_role" columnNames="user_id,role_code"/>
-        <createIndex indexName="idx_ur_user" tableName="iam_user_role">
+        <addUniqueConstraint tableName="auth_user_role" columnNames="user_id,role_code"/>
+        <createIndex indexName="idx_ur_user" tableName="auth_user_role">
             <column name="user_id" type="bigint"/>
         </createIndex>
 
-        <createTable tableName="iam_role_permission">
+        <createTable tableName="auth_role_permission">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="role_code" type="varchar(64)"><constraints nullable="false"/></column>
             <column name="perm_code" type="varchar(128)"><constraints nullable="false"/></column>
             <column name="granted_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
-        <addUniqueConstraint tableName="iam_role_permission" columnNames="role_code,perm_code"/>
+        <addUniqueConstraint tableName="auth_role_permission" columnNames="role_code,perm_code"/>
 
-        <createTable tableName="iam_oauth2_client">
+        <createTable tableName="auth_oauth2_client">
             <column name="client_id" type="varchar(64)"><constraints primaryKey="true"/></column>
             <column name="client_secret_hash" type="varchar(255)"><constraints nullable="false"/></column>
             <column name="grant_types" type="varchar(255)"><constraints nullable="false"/></column>
@@ -86,7 +86,7 @@
             <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
 
-        <createTable tableName="iam_refresh_token">
+        <createTable tableName="auth_refresh_token">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="token" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
             <column name="user_id" type="bigint"><constraints nullable="false"/></column>
@@ -97,10 +97,10 @@
             <column name="issued_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
             <column name="revoked_at" type="timestamp"/>
         </createTable>
-        <createIndex indexName="idx_rt_token" tableName="iam_refresh_token"><column name="token" type="varchar(128)"/></createIndex>
-        <createIndex indexName="idx_rt_user" tableName="iam_refresh_token"><column name="user_id" type="bigint"/></createIndex>
+        <createIndex indexName="idx_rt_token" tableName="auth_refresh_token"><column name="token" type="varchar(128)"/></createIndex>
+        <createIndex indexName="idx_rt_user" tableName="auth_refresh_token"><column name="user_id" type="bigint"/></createIndex>
 
-        <createTable tableName="iam_audit_log">
+        <createTable tableName="auth_audit_log">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="user_id" type="bigint"/>
             <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
@@ -112,10 +112,10 @@
             <column name="occurred_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
             <column name="hash_chain_prev" type="varchar(128)"/>
         </createTable>
-        <createIndex indexName="idx_audit_user" tableName="iam_audit_log"><column name="user_id" type="bigint"/></createIndex>
-        <createIndex indexName="idx_audit_time" tableName="iam_audit_log"><column name="occurred_at" type="timestamp"/></createIndex>
+        <createIndex indexName="idx_audit_user" tableName="auth_audit_log"><column name="user_id" type="bigint"/></createIndex>
+        <createIndex indexName="idx_audit_time" tableName="auth_audit_log"><column name="occurred_at" type="timestamp"/></createIndex>
 
-        <createTable tableName="iam_social_binding">
+        <createTable tableName="auth_social_binding">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="user_id" type="bigint"><constraints nullable="false"/></column>
             <column name="provider" type="varchar(24)"><constraints nullable="false"/></column>
@@ -123,10 +123,10 @@
             <column name="provider_username" type="varchar(255)"/>
             <column name="bound_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
-        <addUniqueConstraint tableName="iam_social_binding" columnNames="provider,provider_user_id"/>
-        <createIndex indexName="idx_sb_user" tableName="iam_social_binding"><column name="user_id" type="bigint"/></createIndex>
+        <addUniqueConstraint tableName="auth_social_binding" columnNames="provider,provider_user_id"/>
+        <createIndex indexName="idx_sb_user" tableName="auth_social_binding"><column name="user_id" type="bigint"/></createIndex>
 
-        <createTable tableName="iam_api_key">
+        <createTable tableName="auth_api_key">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="prefix" type="varchar(16)"><constraints nullable="false"/></column>
             <column name="key_hash" type="varchar(255)"><constraints nullable="false"/></column>
@@ -135,18 +135,18 @@
             <column name="tenant_code" type="varchar(32)" defaultValue="default"><constraints nullable="false"/></column>
             <column name="scope" type="varchar(64)"/>
             <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
-            <column name="expires_at" type="timestamp" defaultValueComputed="'9999-12-31'"><constraints nullable="false"/></column>
+            <column name="expires_at" type="datetime" defaultValueDate="9999-12-31T00:00:00"><constraints nullable="false"/></column>
             <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
             <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
             <column name="last_used_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
         </createTable>
-        <addUniqueConstraint tableName="iam_api_key" columnNames="prefix"/>
-        <addUniqueConstraint tableName="iam_api_key" columnNames="key_hash"/>
+        <addUniqueConstraint tableName="auth_api_key" columnNames="prefix"/>
+        <addUniqueConstraint tableName="auth_api_key" columnNames="key_hash"/>
     </changeSet>
 
     <changeSet id="002-create-saml-idp-registration" author="iam">
-        <preConditions onFail="MARK_RAN"><not><tableExists tableName="iam_saml_idp_registration"/></not></preConditions>
-        <createTable tableName="iam_saml_idp_registration">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="auth_saml_idp_registration"/></not></preConditions>
+        <createTable tableName="auth_saml_idp_registration">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
             <column name="registration_id" type="varchar(64)"><constraints nullable="false"/></column>
@@ -158,13 +158,13 @@
             <column name="acs_template" type="varchar(255)"/>
             <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
         </createTable>
-        <addUniqueConstraint tableName="iam_saml_idp_registration" columnNames="tenant_code,registration_id"/>
-        <createIndex indexName="idx_saml_tenant" tableName="iam_saml_idp_registration"><column name="tenant_code" type="varchar(32)"/></createIndex>
+        <addUniqueConstraint tableName="auth_saml_idp_registration" columnNames="tenant_code,registration_id"/>
+        <createIndex indexName="idx_saml_tenant" tableName="auth_saml_idp_registration"><column name="tenant_code" type="varchar(32)"/></createIndex>
     </changeSet>
 
-    <changeSet id="003-create-system-config" author="iam">
-        <preConditions onFail="MARK_RAN"><not><tableExists tableName="system_config"/></not></preConditions>
-        <createTable tableName="system_config">
+    <changeSet id="003-create-admin-system-config" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="admin_system_config"/></not></preConditions>
+        <createTable tableName="admin_system_config">
             <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
             <column name="cfg_key" type="varchar(128)"><constraints nullable="false" unique="true"/></column>
             <column name="cfg_value" type="text"><constraints nullable="false"/></column>
@@ -175,86 +175,86 @@
     </changeSet>
 
     <changeSet id="004-seed-social-config" author="iam">
-        <preConditions onFail="MARK_RAN"><tableExists tableName="system_config"/></preConditions>
-        <insert tableName="system_config">
+        <preConditions onFail="MARK_RAN"><tableExists tableName="admin_system_config"/></preConditions>
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.redirect-base-url"/>
             <column name="cfg_value" value="http://localhost:8080/iam/api/auth/social"/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="Social login callback base URL"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.wechat.app-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="WeChat Open Platform app id"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.wechat.app-secret"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="WeChat Open Platform app secret"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.alipay.app-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="Alipay app id"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.alipay.app-private-key"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="Alipay RSA2 app private key"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.alipay.alipay-public-key"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="Alipay RSA2 public key"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.alipay.redirect-uri"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="Alipay registered HTTPS callback URL"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.qq.app-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="QQ Connect app id"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.qq.app-key"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="QQ Connect app key"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.dingtalk.app-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="DingTalk OAuth app id"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.dingtalk.app-secret"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="DingTalk OAuth app secret"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.wecom.corp-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>
             <column name="description" value="WeCom corp id"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.wecom.corp-secret"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="secret"/>
             <column name="description" value="WeCom corp secret"/>
         </insert>
-        <insert tableName="system_config">
+        <insert tableName="admin_system_config">
             <column name="cfg_key" value="iam.social.wecom.agent-id"/>
             <column name="cfg_value" value=""/>
             <column name="cfg_type" value="string"/>

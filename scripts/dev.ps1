@@ -165,6 +165,48 @@ function Configure-EncryptedDevConfig {
   Write-Host "      Liquibase drop-first is enabled in auth-server dev config"
 }
 
+function Assert-EncryptedConfigReady {
+  $files = @(
+    'backend\iam-auth-server\src\main\resources\application.yml',
+    'backend\iam-auth-server\src\main\resources\application-dev.yml',
+    'backend\iam-admin\src\main\resources\application.yml',
+    'backend\iam-admin\src\main\resources\application-dev.yml'
+  )
+  $issues = New-Object System.Collections.Generic.List[string]
+  $validEncryptedValuePattern = '^ENC\(v1:[A-Za-z0-9+/=]+:[A-Za-z0-9+/=]+\)$'
+
+  foreach ($relativePath in $files) {
+    $path = Join-Path $root $relativePath
+    if (-not (Test-Path $path)) { continue }
+
+    $lines = Get-Content -LiteralPath $path
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      $line = $lines[$i].Trim()
+      if ($line.StartsWith('#')) { continue }
+
+      foreach ($match in [regex]::Matches($line, 'ENC\([^)]*\)')) {
+        if ($match.Value -notmatch $validEncryptedValuePattern) {
+          $issues.Add("${relativePath}:$($i + 1)")
+        }
+      }
+    }
+  }
+
+  if ($issues.Count -gt 0) {
+    Write-Host "ERROR: encrypted datasource config is not initialized."
+    Write-Host "       Invalid ENC() values were found at:"
+    foreach ($issue in $issues) {
+      Write-Host "       - $issue"
+    }
+    Write-Host ""
+    Write-Host "Generate encrypted values with:"
+    Write-Host "       .\scripts\encrypt-config.ps1 -ConfigKey `"<the same key used by dev.bat>`" -Values `"<jdbc-url>`",`"<username>`",`"<password>`""
+    Write-Host ""
+    Write-Host "Then replace the datasource url/username/password ENC(...) values in the files above."
+    exit 1
+  }
+}
+
 Write-Host "[0/4] stopping any previous java processes (target ports 8080/8081)"
 try {
   Get-Process -Name java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -175,6 +217,7 @@ Write-Host ""
 Write-Host "[1/4] redis check"
 Ensure-Redis
 Configure-EncryptedDevConfig
+Assert-EncryptedConfigReady
 
 Write-Host "[2/4] building backend (skip tests)"
 Push-Location backend
@@ -185,7 +228,7 @@ New-Item -ItemType Directory -Force -Path logs | Out-Null
 
 Write-Host "[3/4] starting iam-auth-server (8080) - dev profile"
 $auth = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
-  -ArgumentList '-jar','backend\iam-auth-server\target\boot\iam-auth-server.jar','--spring.profiles.active=dev' `
+  -ArgumentList '-jar','backend\iam-auth-server\target\boot\iam-auth-server.jar','--spring.profiles.active=dev',"-Diam.config-key=$env:IAM_CONFIG_KEY" `
   -RedirectStandardOutput 'logs\auth-server.log' `
   -RedirectStandardError  'logs\auth-server.err.log' `
   -PassThru -WindowStyle Hidden
@@ -201,7 +244,7 @@ if (-not (Wait-Until {
 
 Write-Host "      starting iam-admin (8081)"
 $admin = Start-Process -FilePath "$env:JAVA_HOME\bin\java.exe" `
-  -ArgumentList '-jar','backend\iam-admin\target\boot\iam-admin.jar','--spring.profiles.active=dev' `
+  -ArgumentList '-jar','backend\iam-admin\target\boot\iam-admin.jar','--spring.profiles.active=dev',"-Diam.config-key=$env:IAM_CONFIG_KEY" `
   -RedirectStandardOutput 'logs\admin.log' `
   -RedirectStandardError  'logs\admin.err.log' `
   -PassThru -WindowStyle Hidden
