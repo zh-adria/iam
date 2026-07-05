@@ -24,6 +24,8 @@ iam:
     issuer: iam-platform-test
     access-ttl-minutes: 30
     refresh-ttl-days: 7
+  scim:
+    auth-token: test-scim-token
   password:
     bcrypt-strength: 4
     max-fail-count: 5

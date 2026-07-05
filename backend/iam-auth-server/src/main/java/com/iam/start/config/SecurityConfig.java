@@ -2,6 +2,7 @@ package com.iam.start.config;
 
 import com.iam.infrastructure.security.AbacMethodSecurityExpressionHandler;
 import com.iam.infrastructure.security.JwtAuthFilter;
+import com.iam.infrastructure.security.ScimAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
@@ -32,6 +33,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
+    private final ScimAuthFilter scimFilter;
     private final ApplicationContext applicationContext;
 
     @Value("${iam.cors.allowed-origins:http://localhost:5173}")
@@ -68,6 +70,7 @@ public class SecurityConfig {
                 .antMatchers("/oauth/authorize").authenticated()
                 .anyRequest().authenticated()
             .and()
+            .addFilterBefore(scimFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         // 只在 SamlConfig 成功装配时才启用 saml2Login filter — 避免空 registration 列表报错。

@@ -20,12 +20,12 @@ import java.util.stream.Collectors;
  * SCIM 2.0 core endpoints (RFC 7643/7644).
  * Mounted at /scim/v2 under the auth-server context-path (/iam).
  *
- * ponytail: all endpoints require ROLE_ADMIN for now.
- *           Add SCIM Bearer-token auth scheme when provisioning consumers integrate.
+ * Auth: either ROLE_ADMIN (admin JWT) or ROLE_SCIM_PROVISIONER (SCIM Bearer token).
+ * Configure the SCIM token via iam.scim.auth-token in application.yml.
  */
 @RestController
 @RequestMapping("/scim/v2")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SCIM_PROVISIONER')")
 @RequiredArgsConstructor
 public class ScimController {
 

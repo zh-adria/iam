@@ -44,6 +44,8 @@ iam:
     issuer: iam-platform
     access-ttl-minutes: 30
     refresh-ttl-days: 7
+  scim:
+    auth-token: dev-scim-secret-change-in-prod
   password:
     bcrypt-strength: 10
     max-fail-count: 5
