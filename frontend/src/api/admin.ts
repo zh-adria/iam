@@ -60,6 +60,18 @@ export interface ClientRow { clientId: string; grantTypes: string; redirectUris:
 export interface AuditRow { id: number; userId: number; tenant: string; action: string; result: string; principal: string; ip: string; detail: string; occurredAt: string; prevHash: string }
 export interface ConfigItem { key: string; value: string; type: string; description?: string }
 export interface ConfigResponse { items: ConfigItem[] }
+export interface SamlIdpRow {
+  id?: number
+  tenantCode: string
+  registrationId: string
+  idpEntityId: string
+  idpSsoUrl?: string
+  idpMetadataUrl?: string
+  idpMetadataXml?: string
+  spEntityId?: string
+  acsTemplate?: string
+  enabled?: boolean
+}
 
 export const adminApi = {
   // users
@@ -144,6 +156,17 @@ export const adminApi = {
   },
   async deleteClient(clientId: string): Promise<void> {
     await http.delete(`/oauth2/clients/${clientId}`)
+  },
+  // SAML
+  async listSamlIdps(tenant?: string): Promise<SamlIdpRow[]> {
+    const { data } = await http.get('/saml/idps', { params: tenant ? { tenant } : {} })
+    return data.data || []
+  },
+  async upsertSamlIdp(item: SamlIdpRow): Promise<void> {
+    await http.post('/saml/idps', item)
+  },
+  async deleteSamlIdp(tenantCode: string, registrationId: string): Promise<void> {
+    await http.delete(`/saml/idps/${encodeURIComponent(tenantCode)}/${encodeURIComponent(registrationId)}`)
   },
   // audit
   async listAudit(page = 1, size = 50, userId?: number): Promise<Page<AuditRow>> {

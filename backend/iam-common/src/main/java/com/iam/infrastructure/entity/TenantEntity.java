@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_tenant",
+@Table(name = "auth_tenant",
        uniqueConstraints = @UniqueConstraint(columnNames = "code"))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class TenantEntity {

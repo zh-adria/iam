@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_role")
+@Table(name = "auth_role")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class RoleEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

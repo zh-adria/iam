@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # ponytail: production-like single-command bring-up via docker compose.
-# Builds both backend images (Dockerfile SERVICE arg) + frontend not included
-# (serve frontend from nginx/CDN separately in prod).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+if [ -z "${IAM_CONFIG_KEY:-}" ]; then
+  echo "ERROR: IAM_CONFIG_KEY environment variable is required."
+  echo "  export IAM_CONFIG_KEY=your-secret-key"
+  echo "  Or create a .env file in the project root."
+  exit 1
+fi
 
 docker compose up -d --build
 

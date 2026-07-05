@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_refresh_token",
+@Table(name = "auth_refresh_token",
        indexes = {
            @Index(name = "idx_rt_token", columnList = "token"),
            @Index(name = "idx_rt_user", columnList = "userId")

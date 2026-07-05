@@ -1,63 +1,112 @@
-version: "3.8"
+# docker-compose.yml — IAM Platform production stack
+#
+# Usage:
+#   docker compose up -d --build                    # 启动全部（含本地 MySQL）
+#   docker compose up -d --build iam-redis iam-auth iam-admin   # 仅 Redis + 应用（远程 MySQL）
+#
+# Environment:
+#   IAM_CONFIG_KEY  必填 — 解密 application.yml 中 ENC() 加密的数据库密码
+#   DB_HOST         默认 mysql6.sqlpub.com（远程数据库）
+#   REDIS_PASS      Redis 密码（默认空）
 
-x-iam-service: &iam-service
-  build:
-    context: ./backend
-    args:
-      SERVICE: iam-auth-server
-  depends_on:
-    mysql:
-      condition: service_healthy
-    redis:
-      condition: service_started
-  environment:
-    DB_HOST: mysql
-    DB_USER: iam
-    DB_PASS: iam123
-    REDIS_HOST: redis
-    IAM_JWT_SECRET: CHANGE_ME_32_bytes_for_mfa_hmac
+version: "3.9"
 
 services:
-  mysql:
+  iam-mysql:
     image: mysql:8.0
     container_name: iam-mysql
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: iam
-      MYSQL_USER: iam
-      MYSQL_PASSWORD: iam123
-    ports: ["3306:3306"]
+      MYSQL_DATABASE: dev_2026
+      MYSQL_USER: dev_2026
+      MYSQL_PASSWORD: uF5RbUeRzGxb9qgG
+    ports:
+      - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./db/demo-data.sql:/docker-entrypoint-initdb.d/01-demo.sql:ro
+      - iam-mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot123"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
       interval: 5s
-      timeout: 5s
-      retries: 20
+      timeout: 3s
+      retries: 5
+    networks: [iam-net]
 
-  redis:
+  iam-redis:
     image: redis:7-alpine
     container_name: iam-redis
-    ports: ["6379:6379"]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
-      - redis-data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+      - iam-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [iam-net]
 
-  iam-auth-server:
-    <<: *iam-service
+  iam-auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: auth-server
+        PORT: 8080
     container_name: iam-auth-server
-    ports: ["8080:8080"]
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES: prod
+      IAM_CONFIG_KEY: ${IAM_CONFIG_KEY:?请设置 IAM_CONFIG_KEY 环境变量}
+      DB_HOST: ${DB_HOST:-mysql6.sqlpub.com}
+      DB_PORT: ${DB_PORT:-3311}
+      DB_NAME: ${DB_NAME:-dev_2026}
+      DB_USER: ${DB_USER:-dev_2026}
+      DB_PASS: ${DB_PASS:-uF5RbUeRzGxb9qgG}
+      REDIS_HOST: iam-redis
+      REDIS_PASS: ${REDIS_PASS:-}
+    depends_on:
+      iam-redis:
+        condition: service_healthy
+      iam-mysql:
+        condition: service_healthy
+    networks: [iam-net]
 
   iam-admin:
-    <<: *iam-service
-    container_name: iam-admin
     build:
-      context: ./backend
+      context: .
+      dockerfile: Dockerfile
       args:
-        SERVICE: iam-admin
-    ports: ["8081:8081"]
+        SERVICE: admin
+        PORT: 8081
+    container_name: iam-admin
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES: prod
+      IAM_CONFIG_KEY: ${IAM_CONFIG_KEY:?请设置 IAM_CONFIG_KEY 环境变量}
+      DB_HOST: ${DB_HOST:-mysql6.sqlpub.com}
+      DB_PORT: ${DB_PORT:-3311}
+      DB_NAME: ${DB_NAME:-dev_2026}
+      DB_USER: ${DB_USER:-dev_2026}
+      DB_PASS: ${DB_PASS:-uF5RbUeRzGxb9qgG}
+      REDIS_HOST: iam-redis
+      REDIS_PASS: ${REDIS_PASS:-}
+    depends_on:
+      iam-redis:
+        condition: service_healthy
+      iam-mysql:
+        condition: service_healthy
+    networks: [iam-net]
 
 volumes:
-  mysql-data:
-  redis-data:
+  iam-mysql-data:
+  iam-redis-data:
+
+networks:
+  iam-net:
+    driver: bridge

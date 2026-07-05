@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_user")
+@Table(name = "auth_user")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class UserEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

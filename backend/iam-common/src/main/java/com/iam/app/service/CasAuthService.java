@@ -3,6 +3,7 @@ package com.iam.app.service;
 import com.iam.app.dto.TokenResponse;
 import com.iam.domain.AuthException;
 import com.iam.infrastructure.entity.UserEntity;
+import com.iam.infrastructure.config.DynamicConfig;
 import com.iam.infrastructure.repository.UserRepository;
 import com.iam.infrastructure.security.AuditLogService;
 import com.iam.infrastructure.security.JwtTokenService;
@@ -32,24 +33,27 @@ public class CasAuthService {
     private final UserRepository userRepo;
     private final JwtTokenService jwt;
     private final AuditLogService audit;
+    private final DynamicConfig dynamicConfig;
     private final RestTemplate http = new RestTemplate();
 
     @Value("${iam.cas.server-url:}") private String casServerUrl;
     @Value("${iam.cas.service-url:http://localhost:8080/iam/api/auth/cas/callback}") private String serviceUrl;
 
     public String authorizeUrl() {
-        if (casServerUrl == null || casServerUrl.isEmpty())
+        String serverUrl = casServerUrl();
+        if (serverUrl == null || serverUrl.isEmpty())
             throw new AuthException("CAS_NOT_CONFIGURED", "iam.cas.server-url 未配置");
-        return casServerUrl + "/login?service=" + URLEncoder.encode(serviceUrl, StandardCharsets.UTF_8);
+        return serverUrl + "/login?service=" + URLEncoder.encode(serviceUrl(), StandardCharsets.UTF_8);
     }
 
     @Transactional
     public TokenResponse callback(String ticket, String ip) {
-        if (casServerUrl == null || casServerUrl.isEmpty())
+        String serverUrl = casServerUrl();
+        if (serverUrl == null || serverUrl.isEmpty())
             throw new AuthException("CAS_NOT_CONFIGURED", "CAS 未配置");
-        String validateUrl = casServerUrl + "/serviceValidate?ticket="
+        String validateUrl = serverUrl + "/serviceValidate?ticket="
                 + URLEncoder.encode(ticket, StandardCharsets.UTF_8)
-                + "&service=" + URLEncoder.encode(serviceUrl, StandardCharsets.UTF_8);
+                + "&service=" + URLEncoder.encode(serviceUrl(), StandardCharsets.UTF_8);
         String body;
         try {
             body = http.getForObject(validateUrl, String.class);
@@ -82,5 +86,13 @@ public class CasAuthService {
         Pattern p = Pattern.compile("<" + tag + ">([^<]+)</" + tag + ">");
         Matcher m = p.matcher(xml);
         return m.find() ? m.group(1) : null;
+    }
+
+    private String casServerUrl() {
+        return dynamicConfig.getString("iam.cas.server-url", casServerUrl == null ? "" : casServerUrl);
+    }
+
+    private String serviceUrl() {
+        return dynamicConfig.getString("iam.cas.service-url", serviceUrl);
     }
 }

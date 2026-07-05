@@ -20,6 +20,6 @@ Pop-Location
 
 Write-Host ""
 Write-Host "build OK:"
-Write-Host "  backend\iam-auth-server\target\iam-auth-server-1.0.0-SNAPSHOT.jar"
-Write-Host "  backend\iam-admin\target\iam-admin-1.0.0-SNAPSHOT.jar"
+Write-Host "  backend\iam-auth-server\target\boot\iam-auth-server.jar"
+Write-Host "  backend\iam-admin\target\boot\iam-admin.jar"
 Write-Host "  frontend\dist\"

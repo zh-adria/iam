@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_social_binding",
+@Table(name = "auth_social_binding",
        uniqueConstraints = @UniqueConstraint(columnNames = {"provider","providerUserId"}),
        indexes = @Index(name = "idx_sb_user", columnList = "userId"))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

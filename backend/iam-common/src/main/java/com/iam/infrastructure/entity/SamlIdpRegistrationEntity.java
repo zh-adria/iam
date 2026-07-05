@@ -8,7 +8,7 @@ import javax.persistence.*;
  * dynamic DB-driven registration. Multiple IdPs per tenant supported.
  */
 @Entity
-@Table(name = "iam_saml_idp_registration",
+@Table(name = "auth_saml_idp_registration",
        uniqueConstraints = @UniqueConstraint(columnNames = {"tenant_code","registration_id"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class SamlIdpRegistrationEntity {

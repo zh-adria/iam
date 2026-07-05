@@ -5,7 +5,7 @@ import javax.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_api_key",
+@Table(name = "auth_api_key",
        uniqueConstraints = {@UniqueConstraint(columnNames = "prefix"), @UniqueConstraint(columnNames = "key_hash")})
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class ApiKeyEntity {

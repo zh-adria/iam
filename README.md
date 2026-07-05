@@ -5,16 +5,56 @@
 ## 快速开始
 
 ```bash
-# 一键启动（Windows PowerShell）
-.\scripts\start.bat
+# 开发模式（需先配置 IAM_CONFIG_KEY，见下方「加密配置」）
+.\scripts\dev.ps1              # Windows（推荐）
+./scripts/dev.sh               # Linux / Git Bash
 
-# 一键启动（Linux / Git Bash）
-./scripts/start.sh
+# 仅后端
+.\scripts\dev-backend.ps1      # Windows
+./scripts/dev-backend.sh       # Linux
 
-# 本地开发模式（后端 :8080，前端 :5173）
-.\scripts\dev.bat             # Windows
-./scripts/dev.sh              # Linux
-cd frontend && npm i && npm run dev
+# 仅前端
+.\scripts\dev-frontend.ps1     # Windows
+./scripts/dev-frontend.sh      # Linux
+
+# Docker 部署（需 IAM_CONFIG_KEY）
+.\scripts\start.ps1             # Windows
+./scripts/start.sh              # Linux
+```
+
+## 加密配置
+
+数据库连接参数存储在 `ENC()` 加密格式中。启动前必须配置解密密钥。
+
+### 首次设置（只需一次）
+
+```powershell
+# 1. 设置你的解密密钥（记住它，后续启动都需要）
+$env:IAM_CONFIG_KEY = "my-super-secret-key-2026"
+
+# 2. 运行加密脚本生成 ENC() 值
+.\scripts\encrypt-config.ps1 -ConfigKey $env:IAM_CONFIG_KEY
+
+# 3. 将输出的 3 行加密值复制到 4 个配置文件中的对应位置：
+#    - backend/iam-auth-server/src/main/resources/application-dev.yml
+#    - backend/iam-auth-server/src/main/resources/application.yml
+#    - backend/iam-admin/src/main/resources/application-dev.yml
+#    - backend/iam-admin/src/main/resources/application.yml
+```
+
+### 持久化密钥
+
+为了避免每次重启都输入密钥，将其保存到本地（git 不会提交）：
+
+```powershell
+# PowerShell 会加密存储到 scripts/.secrets/iam-config-key.txt
+.\scripts\dev.ps1
+# 首次运行时会提示输入密钥并自动保存
+```
+
+或通过环境变量永久设置：
+```powershell
+[System.Environment]::SetEnvironmentVariable("IAM_CONFIG_KEY", "my-super-secret-key-2026", "User")
 ```
 
 **演示账号**
@@ -25,6 +65,15 @@ cd frontend && npm i && npm run dev
 | alice | User@2026 | ROLE_USER |
 
 OAuth2 客户端：`demo-client` / `demo-secret`
+
+## 数据库表前缀
+
+表名使用 `auth_` 前缀区分认证核心功能线，`admin_` 前缀区分管理后台功能线：
+
+| 前缀 | 归属 | 示例 |
+|------|------|------|
+| `auth_` | auth-server 认证核心 | `auth_user`, `auth_role`, `auth_permission`, `auth_oauth2_client`, `auth_refresh_token`, `auth_audit_log`, ... |
+| `admin_` | admin-server 管理后台 | `admin_system_config` |
 
 ## 服务模式（同一 jar，按 profile 切换）
 
@@ -325,16 +374,19 @@ com.iam/
 
 | 表 | 用途 |
 |----|------|
-| `iam_tenant`             | 租户（隔离模式、Schema、LDAP 配置） |
-| `iam_user`               | 用户（BCrypt 密码、MFA 密钥、锁定状态） |
-| `iam_role`               | 角色 |
-| `iam_permission`         | 权限（API/MENU/BUTTON/DATA + SpEL） |
-| `iam_user_role`          | 用户-角色多对多 |
-| `iam_role_permission`    | 角色-权限多对多 |
-| `iam_oauth2_client`      | 注册客户端 |
-| `iam_refresh_token`      | 刷新令牌（轮换 + 撤销） |
-| `iam_audit_log`          | 审计日志（SHA-256 哈希链） |
-| `iam_social_binding`     | 社交账号绑定 |
+| `auth_tenant`             | 租户（隔离模式、Schema、LDAP 配置） |
+| `auth_user`               | 用户（BCrypt 密码、MFA 密钥、锁定状态） |
+| `auth_role`               | 角色 |
+| `auth_permission`         | 权限（API/MENU/BUTTON/DATA + SpEL） |
+| `auth_user_role`          | 用户-角色多对多 |
+| `auth_role_permission`    | 角色-权限多对多 |
+| `auth_oauth2_client`      | 注册客户端 |
+| `auth_refresh_token`      | 刷新令牌（轮换 + 撤销） |
+| `auth_audit_log`          | 审计日志（SHA-256 哈希链） |
+| `auth_social_binding`     | 社交账号绑定 |
+| `auth_saml_idp_registration` | SAML IdP 多租户注册 |
+| `auth_api_key`            | API Key |
+| `admin_system_config`     | 系统配置（KV） |
 
 ## 安全要点
 
@@ -350,14 +402,43 @@ com.iam/
 
 ## 部署
 
+### Docker Compose（推荐）
+
 ```bash
-# 后端（需要 MySQL + Redis）
+# 1. 复制环境变量模板
+cp .env.example .env
+# 编辑 .env，设置 IAM_CONFIG_KEY
+
+# 2. 启动（含本地 MySQL + Redis + 两个服务）
 docker compose up -d --build
 
-# 前端
-cd frontend && npm run build    # 产出 dist/
-# 任何静态服务器反向代理 /iam/* 到后端
+# 或仅启动应用（使用远程 MySQL）
+docker compose up -d --build iam-redis iam-auth iam-admin
 ```
+
+### 手动部署
+
+```bash
+# 构建
+mvn clean package -DskipTests
+cd frontend && npm run build
+
+# 启动（需要 IAM_CONFIG_KEY 环境变量）
+java -jar backend/iam-auth-server/target/boot/iam-auth-server.jar --spring.profiles.active=prod
+java -jar backend/iam-admin/target/boot/iam-admin.jar --spring.profiles.active=prod
+```
+
+## 脚本速查
+
+| 任务 | Linux/Mac/Git Bash | Windows PowerShell |
+|------|--------------------|--------------------|
+| 开发模式（完整栈） | `./scripts/dev.sh` | `.\scripts\dev.ps1` |
+| 仅后端 | `./scripts/dev-backend.sh` | `.\scripts\dev-backend.ps1` |
+| 仅前端 | `./scripts/dev-frontend.sh` | `.\scripts\dev-frontend.ps1` |
+| 加密数据库配置 | — | `.\scripts\encrypt-config.ps1` |
+| Docker 部署 | `./scripts/start.sh` | `.\scripts\start.ps1` |
+| 停止一切 | `./scripts/stop.sh` | `.\scripts\stop.ps1` |
+| 仅构建 | `./scripts/build.sh` | `.\scripts\build.ps1` |
 
 ## 文档索引
 
@@ -375,4 +456,4 @@ cd frontend && npm run build    # 产出 dist/
 
 ## 许可
 
-内部项目，未开放许可。
+MIT License — see [LICENSE](./LICENSE) for details.

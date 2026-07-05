@@ -2,6 +2,7 @@ package com.iam.app.service;
 
 import com.iam.app.dto.TokenResponse;
 import com.iam.domain.AuthException;
+import com.iam.infrastructure.config.DynamicConfig;
 import com.iam.infrastructure.entity.UserEntity;
 import com.iam.infrastructure.repository.UserRepository;
 import com.iam.infrastructure.security.AuditLogService;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * SMS verification code: send + verify. Stored in Redis with TTL.
@@ -31,7 +33,8 @@ public class SmsCodeService {
     private final UserRepository userRepo;
     private final JwtTokenService jwt;
     private final AuditLogService audit;
-    private final SmsSender smsSender;
+    private final DynamicConfig dynamicConfig;
+    private final List<SmsSender> smsSenders;
     private final SecureRandom rng = new SecureRandom();
 
     @Value("${iam.sms.code-ttl-seconds:300}") private long ttlSec;
@@ -40,11 +43,12 @@ public class SmsCodeService {
     public void send(String phone) {
         if (phone == null || phone.length() < 7) throw new AuthException("BAD_PHONE", "手机号格式错误");
         String code = generate();
-        cache.cacheSmsCode(phone, code, Duration.ofSeconds(ttlSec));
+        cache.cacheSmsCode(phone, code, Duration.ofSeconds(ttlSeconds()));
+        SmsSender sender = smsSender();
         try {
-            smsSender.send(phone, code);
+            sender.send(phone, code);
         } catch (Exception e) {
-            log.error("SMS send failed via {}: {}", smsSender.providerName(), e.getMessage());
+            log.error("SMS send failed via {}: {}", sender.providerName(), e.getMessage());
             throw new AuthException("SMS_SEND_FAILED", "短信发送失败");
         }
     }
@@ -75,8 +79,24 @@ public class SmsCodeService {
     }
 
     private String generate() {
-        int max = (int) Math.pow(10, codeLength);
+        int max = (int) Math.pow(10, codeLength());
         int n = rng.nextInt(max);
-        return String.format("%0" + codeLength + "d", n);
+        return String.format("%0" + codeLength() + "d", n);
+    }
+
+    private long ttlSeconds() {
+        return dynamicConfig.getLong("iam.sms.code-ttl-seconds", ttlSec);
+    }
+
+    private int codeLength() {
+        return dynamicConfig.getInt("iam.sms.code-length", codeLength);
+    }
+
+    private SmsSender smsSender() {
+        String provider = dynamicConfig.getString("iam.sms.provider", "stub");
+        return smsSenders.stream()
+                .filter(sender -> sender.providerName().equalsIgnoreCase(provider))
+                .findFirst()
+                .orElseThrow(() -> new AuthException("SMS_PROVIDER_NOT_FOUND", "短信服务商未配置: " + provider));
     }
 }

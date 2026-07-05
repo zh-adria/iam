@@ -4,7 +4,7 @@ import javax.persistence.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "system_config",
+@Table(name = "admin_system_config",
        uniqueConstraints = @UniqueConstraint(columnNames = "cfg_key"))
 public class ConfigItemEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

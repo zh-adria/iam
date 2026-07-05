@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.Set;
 
 @Entity
-@Table(name = "iam_oauth2_client")
+@Table(name = "auth_oauth2_client")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class OAuth2ClientEntity {
     @Id @Column(length = 64)

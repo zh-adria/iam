@@ -1,5 +1,6 @@
 package com.iam.infrastructure.ldap;
 
+import com.iam.infrastructure.config.DynamicConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Configuration
 public class LdapConfig {
+
+    private final DynamicConfig dynamicConfig;
+
+    public LdapConfig(DynamicConfig dynamicConfig) {
+        this.dynamicConfig = dynamicConfig;
+    }
 
     @Value("${iam.ldap.url:}")
     private String sysUrl = "";
@@ -40,6 +47,7 @@ public class LdapConfig {
 
     @PostConstruct
     public void init() {
+        applyDynamicConfig();
         sysEnabled = sysUrl != null && !sysUrl.isEmpty();
         if (sysEnabled) {
             sysTemplate = build(sysUrl, sysBase, sysManagerDn, sysManagerPassword);
@@ -48,6 +56,11 @@ public class LdapConfig {
         } else {
             log.info("LDAP not configured (iam.ldap.url empty) — system LDAP disabled, per-tenant still possible");
         }
+        dynamicConfig.onChange((key, value) -> {
+            if (key != null && key.startsWith("iam.ldap.")) {
+                reconfigureFromDynamic();
+            }
+        });
     }
 
     /** System-level default template. */
@@ -92,7 +105,36 @@ public class LdapConfig {
         this.sysUserDnPattern = userDnPattern;
         this.sysManagerDn = managerDn;
         this.sysManagerPassword = managerPassword;
-        init();
+        refreshSystemTemplate();
+    }
+
+    private void reconfigureFromDynamic() {
+        applyDynamicConfig();
+        refreshSystemTemplate();
+    }
+
+    private void applyDynamicConfig() {
+        this.sysUrl = dynamicConfig.getString("iam.ldap.url", sysUrl == null ? "" : sysUrl);
+        this.sysBase = dynamicConfig.getString("iam.ldap.base", sysBase == null ? "" : sysBase);
+        this.sysUserDnPattern = dynamicConfig.getString("iam.ldap.user-dn-pattern",
+                sysUserDnPattern == null || sysUserDnPattern.isEmpty() ? "uid={0},ou=people" : sysUserDnPattern);
+        this.sysManagerDn = dynamicConfig.getString("iam.ldap.manager-dn", sysManagerDn == null ? "" : sysManagerDn);
+        this.sysManagerPassword = dynamicConfig.getString("iam.ldap.manager-password",
+                sysManagerPassword == null ? "" : sysManagerPassword);
+    }
+
+    private void refreshSystemTemplate() {
+        templates.clear();
+        baseByUrl.clear();
+        sysEnabled = sysUrl != null && !sysUrl.isEmpty();
+        if (sysEnabled) {
+            sysTemplate = build(sysUrl, sysBase, sysManagerDn, sysManagerPassword);
+            baseByUrl.put(sysUrl, sysBase);
+            log.info("LDAP system default refreshed: url={} base={}", sysUrl, sysBase);
+        } else {
+            sysTemplate = null;
+            log.info("LDAP system default disabled");
+        }
     }
 
     private LdapTemplate build(String url, String base, String managerDn, String managerPw) {

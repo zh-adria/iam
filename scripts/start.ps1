@@ -2,6 +2,13 @@
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
+if (-not $env:IAM_CONFIG_KEY) {
+  Write-Host "ERROR: IAM_CONFIG_KEY environment variable is required."
+  Write-Host "  Set it with: `$env:IAM_CONFIG_KEY = 'your-secret-key'"
+  Write-Host "  Or create a .env file in the project root."
+  exit 1
+}
+
 docker compose up -d --build
 
 Write-Host ""

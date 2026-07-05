@@ -91,6 +91,7 @@ import ClientsPane from './panes/ClientsPane.vue'
 import TenantsPane from './panes/TenantsPane.vue'
 import AuditPane from './panes/AuditPane.vue'
 import ConfigPane from './panes/ConfigPane.vue'
+import AuthProtocolsPane from './panes/AuthProtocolsPane.vue'
 
 const router = useRouter()
 const tab = ref('users')
@@ -120,6 +121,8 @@ const navItems: NavItem[] = [
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' },
   { key: 'clients', label: 'OAuth2 客户端',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>' },
+  { key: 'auth-protocols', label: '认证协议',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-5"/></svg>' },
   { key: 'tenants', label: '租户管理',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' },
   { key: 'audit', label: '审计日志',
@@ -133,6 +136,7 @@ const views: Record<string, ReturnType<typeof defineComponent>> = {
   roles: RolesPane,
   perms: PermsPane,
   clients: ClientsPane,
+  'auth-protocols': AuthProtocolsPane,
   tenants: TenantsPane,
   audit: AuditPane,
   config: ConfigPane

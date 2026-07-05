@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_permission")
+@Table(name = "auth_permission")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class PermissionEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

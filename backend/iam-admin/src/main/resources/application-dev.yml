@@ -5,9 +5,11 @@ server:
 
 spring:
   datasource:
-    url: 'ENC(v1:qdr4pu5G2KgKhbsd:JiHf0jo0eGkhVKeBR4obE8X5S2FxtZh/dO8I+jseGoRX0TnuQDu6gY6zdM34dCx9VTlDVzmvlASBmt1DwCOWDmpDd4NEq84xoHWDjE86p7H5mlIYCqzegF8EOkBy6s8+cPMFtmK04cE3BEQzKOvH7USk6o0H2IYs245rGZMvOUi+4T95Yriox2pnaeA8sTHLw5ox3EP6i7rZzaEbJ6ZDHRUVTkkEYqOHmtI=)'
-    username: 'ENC(v1:bKyp8tixmxU9yNoY:CFOR70P04O+9Q9n2QTHwi+kSmm2pHLtd)'
-    password: 'ENC(v1:+LvnX7j1+CCpyYLP:sPtTiczWYu6EfGAfPX5ikjyZhU4Bwo/SD1uyrp7u1R4=)'
+    # 加密说明：与 auth-server 共享同一数据库，使用相同的 ENC() 加密值。
+    # 请参考 auth-server 的 application-dev.yml 注释，用 ConfigEncryptTool 生成。
+    url: 'ENC(v1:XYUe7WjqWe0IpyUO:K5S6FWcNCm/oMeJROAlMQwdL+VWyCjwd4D0R9Jpss1Y6UCOheVTp7+zkCwNbktqqSUTSZG5MVSia36UMaTFLsBzXV3TErXIuNcSEXYW0+25mgeCqKdjjdV36N9XCBsRffl1npvLPJebPnCJUuDtOERixft7QZt6lWjkxisbYVeYsDxCU1Nu0EmgIOF7zVRKvlr8vcuTm0wH20oGBTT0jSAoWM5tWF7XoK4Jgyl03obltTxsvg8h0VoGa6Izg4VT9C06f/SpdthE=)'
+    username: 'ENC(v1:YG+D9dnPJRoHjfMP:pfRRi42WrA68EeUUONtNs1hVpeBzCTQC)'
+    password: 'ENC(v1:Zshb0MK5/sE3AAsl:vGO3xPh1kuLdEnoSHExsCPswUO1mAOyC3GmBu3nE+sw=)'
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:

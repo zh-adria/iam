@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_user_role",
+@Table(name = "auth_user_role",
        uniqueConstraints = @UniqueConstraint(columnNames = {"userId","roleCode"}),
        indexes = @Index(name = "idx_ur_user", columnList = "userId"))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder

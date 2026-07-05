@@ -4,9 +4,9 @@ import com.aliyun.dysmsapi20170525.Client;
 import com.aliyun.dysmsapi20170525.models.SendSmsRequest;
 import com.aliyun.dysmsapi20170525.models.SendSmsResponse;
 import com.aliyun.teaopenapi.models.Config;
+import com.iam.infrastructure.config.DynamicConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,9 +24,9 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "iam.sms.provider", havingValue = "aliyun")
 public class AliyunSmsSender implements SmsSender {
 
+    private final DynamicConfig dynamicConfig;
     private final String accessKey;
     private final String secret;
     private final String signName;
@@ -34,11 +34,13 @@ public class AliyunSmsSender implements SmsSender {
     private final String endpoint;
 
     public AliyunSmsSender(
+            DynamicConfig dynamicConfig,
             @Value("${iam.sms.aliyun-access-key:}") String accessKey,
             @Value("${iam.sms.aliyun-secret:}") String secret,
             @Value("${iam.sms.aliyun-sign-name:}") String signName,
             @Value("${iam.sms.aliyun-template-code:}") String templateCode,
             @Value("${iam.sms.aliyun-endpoint:dysmsapi.aliyuncs.com}") String endpoint) {
+        this.dynamicConfig = dynamicConfig;
         this.accessKey = accessKey;
         this.secret = secret;
         this.signName = signName;
@@ -48,15 +50,20 @@ public class AliyunSmsSender implements SmsSender {
 
     @Override
     public String send(String phone, String code) throws Exception {
+        String actualAccessKey = dynamicConfig.getString("iam.sms.aliyun-access-key", accessKey);
+        String actualSecret = dynamicConfig.getString("iam.sms.aliyun-secret", secret);
+        String actualSignName = dynamicConfig.getString("iam.sms.aliyun-sign-name", signName);
+        String actualTemplateCode = dynamicConfig.getString("iam.sms.aliyun-template-code", templateCode);
+        String actualEndpoint = dynamicConfig.getString("iam.sms.aliyun-endpoint", endpoint);
         Config config = new Config()
-                .setAccessKeyId(accessKey)
-                .setAccessKeySecret(secret)
-                .setEndpoint(endpoint);
+                .setAccessKeyId(actualAccessKey)
+                .setAccessKeySecret(actualSecret)
+                .setEndpoint(actualEndpoint);
         Client client = new Client(config);
         SendSmsRequest req = new SendSmsRequest()
                 .setPhoneNumbers(phone)
-                .setSignName(signName)
-                .setTemplateCode(templateCode)
+                .setSignName(actualSignName)
+                .setTemplateCode(actualTemplateCode)
                 .setTemplateParam("{\"code\":\"" + code + "\"}");
         SendSmsResponse resp = client.sendSms(req);
         log.info("[SMS-ALIYUN] send to {}: requestId={} code={}", phone,

@@ -6,7 +6,7 @@ import javax.persistence.GenerationType;
 import java.time.Instant;
 
 @Entity
-@Table(name = "iam_role_permission",
+@Table(name = "auth_role_permission",
        uniqueConstraints = @UniqueConstraint(columnNames = {"roleCode","permCode"}))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class RolePermissionEntity {
