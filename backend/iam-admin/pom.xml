@@ -36,6 +36,10 @@
             <!-- ponytail: runtime scope so dev profile can use H2 file DB. -->
             <scope>runtime</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-ui</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
