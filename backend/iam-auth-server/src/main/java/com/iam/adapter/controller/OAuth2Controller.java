@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -124,16 +126,22 @@ public class OAuth2Controller {
 
     /** OIDC-style discovery document. */
     @GetMapping("/.well-known/openid-configuration")
-    public Map<String, Object> discovery() {
+    public Map<String, Object> discovery(HttpServletRequest req) {
+        String base = ServletUriComponentsBuilder.fromRequest(req)
+                .replacePath(req.getServletPath())
+                .replaceQuery(null)
+                .build()
+                .toUriString();
+        String issuer = base + "/oauth";
+
         Map<String, Object> m = new HashMap<>();
-        String base = "/iam/oauth";
-        m.put("issuer", base);
-        m.put("authorization_endpoint", base + "/authorize");
-        m.put("token_endpoint", base + "/token");
-        m.put("userinfo_endpoint", base + "/userinfo");
-        m.put("jwks_uri", base + "/jwks");
-        m.put("introspection_endpoint", base + "/introspect");
-        m.put("revocation_endpoint", base + "/revoke");
+        m.put("issuer", issuer);
+        m.put("authorization_endpoint", issuer + "/authorize");
+        m.put("token_endpoint", issuer + "/token");
+        m.put("userinfo_endpoint", issuer + "/userinfo");
+        m.put("jwks_uri", issuer + "/jwks");
+        m.put("introspection_endpoint", issuer + "/introspect");
+        m.put("revocation_endpoint", issuer + "/revoke");
         m.put("response_types_supported", new String[]{"code"});
         m.put("grant_types_supported",
                 new String[]{"authorization_code","refresh_token","password","client_credentials"});
