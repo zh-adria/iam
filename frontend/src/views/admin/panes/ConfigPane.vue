@@ -4,7 +4,8 @@
       v-model:query="query"
       search-placeholder="搜索配置 key..."
       :show-search="true"
-      :show-create="false"
+      :show-create="true"
+      @create="createItem"
       @search="page = 1"
     />
 
@@ -26,9 +27,10 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" label="说明" min-width="220" />
-      <el-table-column label="操作" width="110" align="right">
+      <el-table-column label="操作" width="150" align="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" plain :loading="savingKey === row.key" @click="save(row)">保存</el-button>
+          <el-button size="small" type="danger" plain :loading="deletingKey === row.key" @click="remove(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -43,23 +45,57 @@
         background
       />
     </div>
+
+    <el-dialog v-model="createDialog" title="新建配置项" width="520px">
+      <div class="form-row">
+        <span class="form-label">配置项 key</span>
+        <el-input v-model="newKey" placeholder="如 iam.social.qq.app-id" />
+      </div>
+      <div class="form-row">
+        <span class="form-label">值</span>
+        <el-input v-model="newValue" placeholder="配置值" />
+      </div>
+      <div class="form-row">
+        <span class="form-label">类型</span>
+        <el-select v-model="newType" style="width:100%">
+          <el-option label="string" value="string" />
+          <el-option label="secret" value="secret" />
+          <el-option label="int" value="int" />
+        </el-select>
+      </div>
+      <div class="form-row">
+        <span class="form-label">说明</span>
+        <el-input v-model="newDesc" placeholder="简要说明" />
+      </div>
+      <template #footer>
+        <el-button @click="createDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmCreate">创建</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adminApi, type ConfigItem } from '../../../api/admin'
 import PaneToolbar from '../../../components/PaneToolbar.vue'
 
 const loading = ref(false)
 const savingKey = ref('')
+const deletingKey = ref('')
 const query = ref('')
 const page = ref(1)
 const size = ref(20)
 const items = ref<ConfigItem[]>([])
 const drafts = ref<Record<string, string>>({})
 const visibleSecrets = ref<Record<string, boolean>>({})
+
+const createDialog = ref(false)
+const newKey = ref('')
+const newValue = ref('')
+const newType = ref('string')
+const newDesc = ref('')
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -92,6 +128,39 @@ async function save(item: ConfigItem): Promise<void> {
   }
 }
 
+async function remove(item: ConfigItem): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`删除配置项 ${item.key}？`, '确认', { type: 'warning' })
+    deletingKey.value = item.key
+    await adminApi.deleteConfig(item.key)
+    items.value = items.value.filter(i => i.key !== item.key)
+    delete drafts.value[item.key]
+    ElMessage.success('已删除')
+  } catch { /* cancelled */ } finally {
+    deletingKey.value = ''
+  }
+}
+
+function createItem() {
+  newKey.value = ''
+  newValue.value = ''
+  newType.value = 'string'
+  newDesc.value = ''
+  createDialog.value = true
+}
+
+async function confirmCreate() {
+  const key = newKey.value.trim()
+  if (!key) return ElMessage.warning('配置项 key 不能为空')
+  try {
+    await adminApi.updateConfig({ key, value: newValue.value, type: newType.value, description: newDesc.value })
+    items.value.push({ key, value: newValue.value, type: newType.value, description: newDesc.value })
+    drafts.value[key] = newValue.value
+    createDialog.value = false
+    ElMessage.success('已创建')
+  } catch { /* ignore */ }
+}
+
 onMounted(load)
 </script>
 
@@ -100,5 +169,17 @@ onMounted(load)
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.form-label {
+  width: 90px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
 }
 </style>

@@ -378,4 +378,8 @@ public class AdminAppService {
     public void setSystemConfig(String key, String value, String type) {
         dynamicConfig.set(key, value == null ? "" : value, type == null || type.isBlank() ? "string" : type);
     }
+
+    public void deleteSystemConfig(String key) {
+        dynamicConfig.remove(key);
+    }
 }

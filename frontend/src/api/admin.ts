@@ -157,5 +157,8 @@ export const adminApi = {
   },
   async updateConfig(item: ConfigItem): Promise<void> {
     await http.put('/config', item)
+  },
+  async deleteConfig(key: string): Promise<void> {
+    await http.delete(`/config/${encodeURIComponent(key)}`)
   }
 }

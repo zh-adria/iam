@@ -237,4 +237,10 @@ public class AdminController {
         admin.setSystemConfig(body.get("key"), body.get("value"), body.getOrDefault("type", "string"));
         return ApiResult.ok(null, "已保存");
     }
+
+    @DeleteMapping("/config/{key}")
+    public ApiResult<Void> deleteConfig(@PathVariable String key) {
+        admin.deleteSystemConfig(key);
+        return ApiResult.ok(null, "已删除");
+    }
 }
