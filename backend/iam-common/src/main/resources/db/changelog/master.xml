@@ -125,6 +125,23 @@
         </createTable>
         <addUniqueConstraint tableName="iam_social_binding" columnNames="provider,provider_user_id"/>
         <createIndex indexName="idx_sb_user" tableName="iam_social_binding"><column name="user_id" type="bigint"/></createIndex>
+
+        <createTable tableName="iam_api_key">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="prefix" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="key_hash" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(64)"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="tenant_code" type="varchar(32)" defaultValue="default"><constraints nullable="false"/></column>
+            <column name="scope" type="varchar(64)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
+            <column name="expires_at" type="timestamp" defaultValueComputed="'9999-12-31'"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="last_used_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="iam_api_key" columnNames="prefix"/>
+        <addUniqueConstraint tableName="iam_api_key" columnNames="key_hash"/>
     </changeSet>
 
     <changeSet id="002-create-saml-idp-registration" author="iam">

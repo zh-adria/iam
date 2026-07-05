@@ -2,6 +2,7 @@ package com.iam.adapter.controller;
 
 import com.iam.app.dto.ApiResult;
 import com.iam.app.service.AdminAppService;
+import com.iam.app.service.ApiKeyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +25,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminAppService admin;
+    private final ApiKeyService apiKeyService;
 
     // ---------- users ----------
     @GetMapping("/users")
@@ -242,5 +245,27 @@ public class AdminController {
     public ApiResult<Void> deleteConfig(@PathVariable String key) {
         admin.deleteSystemConfig(key);
         return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- api keys ----------
+    @PostMapping("/api-keys")
+    public ApiResult<Map<String, Object>> createApiKey(@RequestBody Map<String, String> body) {
+        String prefix = body.getOrDefault("prefix", "live");
+        String name = body.get("name");
+        String owner = body.get("owner");
+        String scope = body.get("scope");
+        long ttl = body.containsKey("ttlSeconds") ? Long.parseLong(body.get("ttlSeconds")) : 365L * 24 * 3600;
+        return ApiResult.ok(apiKeyService.createKey(prefix, name, owner, "default", scope, ttl));
+    }
+
+    @GetMapping("/api-keys")
+    public ApiResult<List<Map<String, Object>>> listApiKeys() {
+        return ApiResult.ok(apiKeyService.listKeys());
+    }
+
+    @DeleteMapping("/api-keys/{id}")
+    public ApiResult<Void> revokeApiKey(@PathVariable Long id) {
+        apiKeyService.revokeKey(id);
+        return ApiResult.ok(null, "已吊销");
     }
 }

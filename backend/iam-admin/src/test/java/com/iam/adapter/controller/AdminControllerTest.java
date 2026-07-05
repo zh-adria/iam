@@ -1,6 +1,7 @@
 package com.iam.adapter.controller;
 
 import com.iam.app.service.AdminAppService;
+import com.iam.app.service.ApiKeyService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -28,6 +29,9 @@ class AdminControllerTest {
 
     @MockBean
     private AdminAppService admin;
+
+    @MockBean
+    private ApiKeyService apiKeyService;
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
