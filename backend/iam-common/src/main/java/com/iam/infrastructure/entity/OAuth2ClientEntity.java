@@ -27,6 +27,10 @@ public class OAuth2ClientEntity {
     @Column(nullable = false)
     @lombok.Builder.Default
     private Boolean autoApprove = false;
+    /** OIDC per-client extra claims for ID Token (JSON). */
+    @Lob
+    @Column(name = "id_token_claims")
+    private String idTokenClaims;
     @Column(nullable = false, updatable = false)
     @lombok.Builder.Default
     private Instant createdAt = Instant.now();

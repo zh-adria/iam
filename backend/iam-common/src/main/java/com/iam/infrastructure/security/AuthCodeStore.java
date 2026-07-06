@@ -30,14 +30,16 @@ public class AuthCodeStore {
         private final String codeChallenge;
         private final String codeChallengeMethod;
         private final String nonce;
+        private final String claims;
         private boolean used;
     }
 
     public String issue(Long userId, String clientId, String redirectUri, String scopes,
-                        String codeChallenge, String codeChallengeMethod, String nonce) {
+                        String codeChallenge, String codeChallengeMethod, String nonce,
+                        String claims) {
         String code = UUID.randomUUID().toString().replace("-", "");
         store.put(code, new Entry(userId, clientId, redirectUri, scopes, Instant.now(),
-                codeChallenge, codeChallengeMethod, nonce));
+                codeChallenge, codeChallengeMethod, nonce, claims));
         return code;
     }
 

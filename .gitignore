@@ -28,3 +28,9 @@ iam-dev/
 # OS
 .DS_Store
 Thumbs.db
+
+# Root-level artifacts (should live in frontend/ or backend/)
+/package.json
+/package-lock.json
+/public/
+*.sql

@@ -15,6 +15,18 @@
       <el-table-column prop="redirectUris" label="回调地址" min-width="220" show-overflow-tooltip />
       <el-table-column prop="scopes" label="Scopes" min-width="160" show-overflow-tooltip />
       <el-table-column prop="createdAt" label="创建时间" width="160" />
+      <el-table-column label="Access TTL" width="100" align="center">
+        <template #default="{ row }">{{ row.accessTokenTtlMinutes ?? 30 }} min</template>
+      </el-table-column>
+      <el-table-column label="Refresh TTL" width="110" align="center">
+        <template #default="{ row }">{{ row.refreshTokenTtlDays ?? 7 }} 天</template>
+      </el-table-column>
+      <el-table-column label="自动授权" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.autoApprove" type="success" size="small">是</el-tag>
+          <el-tag v-else type="info" size="small">否</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" min-width="160" align="right">
         <template #default="{ row }">
           <el-button size="small" plain type="primary" @click="onEdit(row)">编辑</el-button>
@@ -58,6 +70,21 @@
         <el-form-item label="Scopes">
           <el-input v-model="form.scopes" placeholder="openid,profile,email" />
         </el-form-item>
+        <el-form-item label="Access Token TTL">
+          <el-input-number v-model="form.accessTokenTtlMinutes" :min="1" :max="1440" />
+          <span class="field-tip">分钟（1-1440）</span>
+        </el-form-item>
+        <el-form-item label="Refresh Token TTL">
+          <el-input-number v-model="form.refreshTokenTtlDays" :min="1" :max="3650" />
+          <span class="field-tip">天（1-3650）</span>
+        </el-form-item>
+        <el-form-item label="自动授权">
+          <el-switch v-model="form.autoApprove" />
+        </el-form-item>
+        <el-form-item label="ID Token Claims">
+          <el-input v-model="form.idTokenClaims" type="textarea" :rows="3" placeholder='{"department":"Engineering"}' />
+          <p class="field-tip">JSON 格式，额外写入 ID Token 的自定义 claims</p>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEdit = false">取消</el-button>
@@ -85,9 +112,13 @@ const form = reactive({
   grantTypesArr: [] as string[],
   redirectUris: '',
   scopes: '',
+  accessTokenTtlMinutes: 30 as number,
+  refreshTokenTtlDays: 7 as number,
+  autoApprove: false,
+  idTokenClaims: '',
 })
 
-const DEFAULT_ITEM = () => ({ _origClientId: '', clientId: '', clientSecret: '', grantTypesArr: [] as string[], redirectUris: '', scopes: '' })
+const DEFAULT_ITEM = () => ({ _origClientId: '', clientId: '', clientSecret: '', grantTypesArr: [] as string[], redirectUris: '', scopes: '', accessTokenTtlMinutes: 30, refreshTokenTtlDays: 7, autoApprove: false, idTokenClaims: '' })
 
 const { page, size, rows, total, reset } = usePagination(allRows)
 
@@ -112,18 +143,26 @@ function onEdit(row: ClientRow | null): void {
     form.grantTypesArr = (row.grantTypes || '').split(',').filter(Boolean)
     form.redirectUris = row.redirectUris
     form.scopes = row.scopes
+    form.accessTokenTtlMinutes = row.accessTokenTtlMinutes ?? 30
+    form.refreshTokenTtlDays = row.refreshTokenTtlDays ?? 7
+    form.autoApprove = row.autoApprove ?? false
+    form.idTokenClaims = row.idTokenClaims || ''
   }
   showEdit.value = true
 }
 async function onSave(): Promise<void> {
-  const payload = {
+  const payload: Record<string, unknown> = {
     clientId: form.clientId,
     clientSecret: form.clientSecret,
     grantTypes: form.grantTypesArr.join(','),
     redirectUris: form.redirectUris,
     scopes: form.scopes,
+    accessTokenTtlMinutes: form.accessTokenTtlMinutes,
+    refreshTokenTtlDays: form.refreshTokenTtlDays,
+    autoApprove: form.autoApprove,
+    idTokenClaims: form.idTokenClaims,
   }
-  await adminApi.upsertClient(payload)
+  await adminApi.upsertClient(payload as Record<string, string>)
   ElMessage.success('已保存')
   showEdit.value = false
   await load()

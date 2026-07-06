@@ -41,6 +41,7 @@ public class OAuth2Controller {
                           @RequestParam(required = false) String code_challenge,
                           @RequestParam(required = false, defaultValue = "S256") String code_challenge_method,
                           @RequestParam(required = false) String nonce,
+                          @RequestParam(required = false) String claims,
                           @AuthenticationPrincipal IamPrincipal principal,
                           HttpServletResponse res) throws IOException {
         if (!"code".equals(response_type)) {
@@ -68,7 +69,8 @@ public class OAuth2Controller {
         }
         String code = oauth.authorize(client_id, redirect_uri, scope, state,
                 code_challenge, code_challenge_method, nonce,
-                principal.getUserId(), principal.getUsername(), principal.getTenantCode());
+                principal.getUserId(), principal.getUsername(), principal.getTenantCode(),
+                claims);
         StringBuilder sb = new StringBuilder(redirect_uri);
         sb.append(redirect_uri.contains("?") ? "&" : "?")
           .append("code=").append(code);
@@ -107,6 +109,20 @@ public class OAuth2Controller {
         return oauth.introspect(token, client_id, client_secret);
     }
 
+    /** OIDC session management — revoke access token and redirect. */
+    @GetMapping("/logout")
+    public void logout(@RequestParam(required = false) String id_token_hint,
+                       @RequestParam(required = false) String post_logout_redirect_uri,
+                       HttpServletRequest req, HttpServletResponse res) throws IOException {
+        if (id_token_hint != null && !id_token_hint.isEmpty()) {
+            oauth.logout(id_token_hint);
+        }
+        String redirect = post_logout_redirect_uri != null && !post_logout_redirect_uri.isEmpty()
+                ? post_logout_redirect_uri
+                : req.getContextPath() + "/";
+        res.sendRedirect(redirect);
+    }
+
     /** RFC 7009 token revocation. */
     @PostMapping(value = "/revoke", consumes = "application/x-www-form-urlencoded")
     public Map<String, Object> revoke(@RequestParam String token,
@@ -127,12 +143,7 @@ public class OAuth2Controller {
     /** OIDC-style discovery document. */
     @GetMapping("/.well-known/openid-configuration")
     public Map<String, Object> discovery(HttpServletRequest req) {
-        String base = ServletUriComponentsBuilder.fromRequest(req)
-                .replacePath(req.getServletPath())
-                .replaceQuery(null)
-                .build()
-                .toUriString();
-        String issuer = base + "/oauth";
+        String issuer = jwt.issuer();
 
         Map<String, Object> m = new HashMap<>();
         m.put("issuer", issuer);
@@ -149,7 +160,23 @@ public class OAuth2Controller {
         m.put("id_token_signing_alg_values_supported", new String[]{"RS256"});
         m.put("code_challenge_methods_supported", new String[]{"S256"});
         m.put("scopes_supported", new String[]{"openid","profile","email","phone"});
+        m.put("end_session_endpoint", issuer + "/logout");
         return m;
+    }
+
+    /** RFC 7591 Dynamic Client Registration. */
+    @PostMapping(value = "/register", consumes = "application/json", produces = "application/json")
+    public Map<String, Object> register(@RequestBody Map<String, Object> body) {
+        return oauth.register(body);
+    }
+
+    /** RFC 7591 Client Metadata — read-only for client_id. */
+    @GetMapping("/register/{clientId}")
+    public Map<String, Object> clientMetadata(@PathVariable String clientId,
+                                              @RequestParam(required = false) String registration_access_token) {
+        var c = oauth.clientMetadata(clientId);
+        c.remove("client_secret"); // never expose
+        return c;
     }
 
     /** RFC 7517 JWKS — returns the RSA public key(s) for RS256 verification by resource servers. */

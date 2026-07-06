@@ -63,10 +63,25 @@ iam:
       acs-base: http://localhost:8080/iam/login/saml2/sso
       frontend-redirect: http://localhost:5173/dashboard
   ldap:
+    # presets: quick templates for common LDAP servers
+    presets:
+      generic:
+        user-dn-pattern: uid={0},ou=people
+        user-search-filter: "(uid={0})"
+      active-directory:
+        user-dn-pattern: "{0}@corp"
+        user-search-filter: "(sAMAccountName={0})"
+      active-directory-bind:
+        user-dn-pattern: "CN={0},OU=Users,DC=corp,DC=local"
+        user-search-filter: "(sAMAccountName={0})"
     # ponytail: empty url disables LDAP. For AD use url=ldaps://ad.corp:636 user-dn-pattern={0}@corp
     url:
     base:
     user-dn-pattern: uid={0},ou=people
+    user-search-filter: "(uid={0})"
+    # LDAP → IAM 字段映射（格式：ldap_attr=iam_field,ldap_attr=iam_field）
+    # 默认：mail→email, cn→displayName
+    attribute-mapping: "mail=email,cn=displayName"
     manager-dn:
     manager-password:
   sms:

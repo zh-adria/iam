@@ -10,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.verify;
@@ -22,6 +23,7 @@ import org.springframework.http.MediaType;
 @WebMvcTest(controllers = AdminController.class)
 @AutoConfigureMockMvc(addFilters = false)
 @Import(AdminController.class)
+@ActiveProfiles("test")
 class AdminControllerTest {
 
     @Autowired

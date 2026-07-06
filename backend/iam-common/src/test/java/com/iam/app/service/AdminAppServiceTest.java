@@ -1,7 +1,10 @@
 package com.iam.app.service;
 
+import com.iam.app.service.ScimProvisionerTokenService;
 import com.iam.infrastructure.config.DynamicConfig;
+import com.iam.infrastructure.ldap.LdapConfig;
 import com.iam.infrastructure.repository.AuditLogRepository;
+import com.iam.infrastructure.repository.LdapGroupRoleMappingRepository;
 import com.iam.infrastructure.repository.OAuth2ClientRepository;
 import com.iam.infrastructure.repository.PermissionRepository;
 import com.iam.infrastructure.repository.RolePermissionRepository;
@@ -44,7 +47,10 @@ class AdminAppServiceTest {
                 mock(OAuth2ClientRepository.class),
                 mock(SamlIdpRegistrationRepository.class),
                 dynamicConfig,
-                mock(PasswordHasher.class));
+                mock(PasswordHasher.class),
+                mock(LdapConfig.class),
+                mock(ScimProvisionerTokenService.class),
+                mock(LdapGroupRoleMappingRepository.class));
 
         Map<String, Object> result = service.systemConfig();
 
@@ -65,7 +71,10 @@ class AdminAppServiceTest {
                 mock(OAuth2ClientRepository.class),
                 mock(SamlIdpRegistrationRepository.class),
                 dynamicConfig,
-                mock(PasswordHasher.class));
+                mock(PasswordHasher.class),
+                mock(LdapConfig.class),
+                mock(ScimProvisionerTokenService.class),
+                mock(LdapGroupRoleMappingRepository.class));
 
         service.setSystemConfig("iam.social.qq.app-id", "qq-client", "string");
 

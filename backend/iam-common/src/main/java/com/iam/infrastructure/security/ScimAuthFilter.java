@@ -1,6 +1,8 @@
 package com.iam.infrastructure.security;
 
+import com.iam.app.service.ScimProvisionerTokenService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,33 +20,33 @@ import java.util.Collections;
 /**
  * SCIM 2.0 Bearer token authentication filter.
  *
- * ponytail: MVP — shared secret from {@code iam.scim.auth-token} config property.
- * External provisioning systems (Okta, JumpCloud) send:
- *   Authorization: Bearer <scim-token>
- * Production upgrade: per-IdP tokens stored in DB, rotated periodically.
+ * Checks DB-backed provisioner tokens first; falls back to legacy shared secret
+ * ({@code iam.scim.auth-token}) only when no DB tokens exist.
  */
 @Slf4j
 @Component
 public class ScimAuthFilter extends OncePerRequestFilter {
 
-    private final String scimToken;
+    private final ScimProvisionerTokenService scimTokenService;
+    private final String legacyToken;
 
-    public ScimAuthFilter(org.springframework.core.env.Environment env) {
-        this.scimToken = env.getProperty("iam.scim.auth-token", "");
+    public ScimAuthFilter(ScimProvisionerTokenService scimTokenService,
+                          Environment env) {
+        this.scimTokenService = scimTokenService;
+        this.legacyToken = env.getProperty("iam.scim.auth-token", "");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res,
                                     FilterChain chain) throws IOException, ServletException {
-        if (scimToken.isBlank()) {
-            chain.doFilter(req, res);
-            return;
-        }
-
         String auth = req.getHeader("Authorization");
         if (auth != null && auth.startsWith("Bearer ")) {
             String token = auth.substring(7);
-            if (scimToken.equals(token)) {
+            boolean ok = scimTokenService.validate(token);
+            if (!ok && legacyToken != null && !legacyToken.isEmpty() && legacyToken.equals(token)) {
+                ok = true;
+            }
+            if (ok) {
                 var principal = new org.springframework.security.core.userdetails.User(
                         "scim-provisioner", "", Collections.singletonList(
                                 new SimpleGrantedAuthority("ROLE_SCIM_PROVISIONER")));

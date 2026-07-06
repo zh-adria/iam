@@ -78,7 +78,7 @@ class LdapAuthTest {
         when(cache.isLocked(any())).thenReturn(false);
         // reconfigure LDAP pointing at in-memory server (test profile leaves url empty)
         ldapConfig.reconfigure("ldap://localhost:" + port, "dc=iam,dc=local",
-                "uid={0},ou=people", "", "");
+                "uid={0},ou=people", "", "", "(uid={0})");
         seeder.run();
     }
 

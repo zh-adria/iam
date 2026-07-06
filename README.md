@@ -1,5 +1,7 @@
 # IAM 统一身份认证与授权平台
 
+> 版本：1.2.0 · 更新：2026-07-05
+
 基于 **Alibaba Cola 4.0 四层架构**（适配器 / 应用 / 领域 / 基础设施）+ Spring Boot 2.7 + Spring Security + OAuth2 + JPA 构建的统一身份认证与授权平台。
 
 ## 快速开始
@@ -72,8 +74,8 @@ OAuth2 客户端：`demo-client` / `demo-secret`
 
 | 前缀 | 归属 | 示例 |
 |------|------|------|
-| `auth_` | auth-server 认证核心 | `auth_user`, `auth_role`, `auth_permission`, `auth_oauth2_client`, `auth_refresh_token`, `auth_audit_log`, ... |
-| `admin_` | admin-server 管理后台 | `admin_system_config` |
+| `auth_` | auth-server 认证核心 | `auth_user`, `auth_role`, `auth_permission`, `auth_oauth2_client`, `auth_refresh_token`, `auth_audit_log`, `auth_saml_idp_registration`, `auth_scim_group`, `auth_scim_group_member`, `auth_scim_token` |
+| `admin_` | admin-server 管理后台 | `admin_system_config`, `admin_ldap_group_role_mapping` |
 
 ## 服务模式（同一 jar，按 profile 切换）
 
@@ -110,7 +112,6 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 | **RFC 7009 令牌撤销** | ✅ | `POST /iam/oauth/revoke` |
 | JWKS (RS256) | ✅ | `GET /iam/oauth/jwks` |
 | SAML 2.0 SP | ✅ | `/iam/saml2/authenticate/{regId}`、`/iam/login/saml2/sso/{regId}` |
-| SCIM 2.0 占位 | ✅ | `/iam/scim/v2/*` |
 | 社交登录（微信 / 支付宝 / QQ / 钉钉 / 企微） | ✅ | `/iam/api/auth/social/{provider}/{authorize,callback}` |
 | 短信验证码 / Magic Link / CAS | ✅ | 完整流程（stub 发送器） |
 | LDAP/AD 认证 | ✅ | `POST /iam/api/auth/ldap` |
@@ -120,7 +121,8 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 | 按租户多 LDAP | ✅ | `TenantEntity.ldapUrl` + 运行时 LdapTemplate 工厂 |
 | 短信 / SMTP / 支付宝 SDK | ✅ | 可插拔接口（`SmsSender` / `MagicSender`） |
 | SAML IdP 多租户注册 | ✅ | `iam_saml_idp_registration` |
-| WebAuthn / Kerberos / SCIM 2.0 全 CRUD | 🔶 | 需接入三方库 |
+| SCIM 2.0 全 CRUD | ✅ | `/iam/scim/v2/Users`、`/Groups`（含成员） |
+| WebAuthn / Kerberos / 支付宝生产 SDK | 🔶 | 需接入三方库 |
 
 > `ponytail:` 标注处为已知简化点与升级路径。
 
@@ -232,8 +234,22 @@ GET    /iam/oauth/jwks                    → JWKS（RS256 公钥）
 # SAML SP
 GET    /iam/saml2/authenticate/{regId}
 POST   /iam/login/saml2/sso/{regId}
+GET    /iam/saml2/metadata/{registrationId}   # SP 元数据（支持多 IdP）
 
-# 用户自服务
+# SCIM 2.0（Bearer Token: iam.scim.auth-token）
+GET    /iam/scim/v2/Users                    # 列表（支持 filter）
+GET    /iam/scim/v2/Users/{id}
+POST   /iam/scim/v2/Users                    # 创建（自动 provision）
+PUT    /iam/scim/v2/Users/{id}               # 全量替换
+PATCH  /iam/scim/v2/Users/{id}               # 部分更新
+DELETE /iam/scim/v2/Users/{id}
+GET    /iam/scim/v2/Groups                   # 列表
+GET    /iam/scim/v2/Groups/{id}
+POST   /iam/scim/v2/Groups                   # 创建
+PUT    /iam/scim/v2/Groups/{id}
+PATCH  /iam/scim/v2/Groups/{id}
+DELETE /iam/scim/v2/Groups/{id}
+GET    /iam/scim/v2/ServiceProviderConfigs
 GET    /iam/api/users/me
 POST   /iam/api/users/register            { username, password, email, phone }
 ```
@@ -281,8 +297,18 @@ GET    /iam/admin/api/config
 
 # SAML IdP 多租户注册
 GET    /iam/admin/api/saml/idps           ?tenant
-POST   /iam/admin/api/saml/idps           { tenantCode, registrationId, idpEntityId, idpSsoUrl, idpMetadataUrl, spEntityId, acsTemplate, enabled }
+POST   /iam/admin/api/saml/idps           { tenantCode, registrationId, idpEntityId, idpSsoUrl, idpMetadataUrl, spEntityId, acsTemplate, enabled, signingCertPem, nameIdFormat, attributeMapping }
 DELETE /iam/admin/api/saml/idps/{tenantCode}/{registrationId}
+
+# SCIM Provisioner Token 管理
+GET    /iam/admin/api/scim/tokens
+POST   /iam/admin/api/scim/tokens         { name, token, tenantCode }
+DELETE /iam/admin/api/scim/tokens/{id}
+
+# LDAP Group Role Mapping
+GET    /iam/admin/api/ldap/group-mappings  ?tenant
+POST   /iam/admin/api/ldap/group-mappings  { tenantCode, ldapGroupDn, roleCode }
+DELETE /iam/admin/api/ldap/group-mappings/{id}
 ```
 
 ## 前端文件结构
@@ -314,9 +340,9 @@ frontend/
           RolesPane.vue      ← 关联权限网格
           PermsPane.vue
           ClientsPane.vue    ← grant_types 多选 / secret
-          TenantsPane.vue
+          TenantsPane.vue    ← LDAP Group→Role 映射
           AuditPane.vue
-          ConfigPane.vue     ← 双 tab
+          ConfigPane.vue     ← 双 tab（认证协议开关 + KV）
     router/index.ts          路由 + admin 守卫（hasRole）
 ```
 
@@ -329,8 +355,11 @@ com.iam/
       AuthController            /api/auth/*
       OAuth2Controller          /oauth/*
       UserController           /api/users/*
+      ScimController           /scim/v2/*
+      ScimProvisionerTokenController  /admin/api/scim/tokens
+      LdapGroupRoleMappingController /admin/api/ldap/group-mappings
       AdminController          /admin/api/*
-      StubProtocolController   WebAuthn/SCIM stub
+      StubProtocolController   WebAuthn/Kerberos stub
       GlobalExceptionHandler
   app/
     service/
@@ -338,19 +367,20 @@ com.iam/
       UserAppService           用户自服务 + MFA
       OAuth2AuthService        4 种 grant_type + PKCE + ID Token + introspect + revoke
       OAuth2ClientAppService   客户端注册
-      LdapAuthService          LDAP/AD 绑定 + provisioning
+      LdapAuthService          LDAP/AD 绑定 + LDAP Group→Role 映射
+      ScimProvisionerTokenService  SCIM Bearer Token 签发/校验
       SocialLoginService       社交登录统一回调
       SmsCodeService           短信验证码 + 手机号登录
       MagicLinkService         Magic Link 令牌
       CasAuthService           CAS 2.0 serviceValidate
-      AdminAppService          管理态 CRUD + 配置
+      AdminAppService          管理态 CRUD + 配置 + SCIM Token + LDAP Group Mapping
       LoginFailureRecorder     失败计数 + 锁定
     dto/                       ApiResult, TokenResponse, LoginCommand
   domain/
     AuthException
   infrastructure/
-    entity/                    User/Role/Permission/OAuth2Client/RefreshToken/AuditLog/Tenant/SocialBinding
-    repository/                Spring Data JPA
+    entity/                    16 个 JPA 实体
+    repository/                16 个 Spring Data repo
     security/
       JwtTokenService          RS256 JWT + ID Token + JWK
       JwtAuthFilter            Bearer 过滤器 + 租户上下文注入
@@ -359,6 +389,7 @@ com.iam/
       AuthCodeStore            OAuth2 授权码 + PKCE 字段
       PasswordHasher           BCrypt
       AuditLogService          异步审计 + 哈希链
+      ScimAuthFilter           SCIM Bearer Token 认证
       AbacPermissionEvaluator / AbacMethodSecurityExpressionHandler
     ldap/ LdapConfig
     sms/   SmsSender / StubSmsSender / AliyunSmsSender
@@ -367,26 +398,30 @@ com.iam/
   start/
     IamApplication
     DemoSeeder
-    config/ SecurityConfig / SamlConfig
+    config/ SecurityConfig / SamlConfig / SamlMetadataRefreshService
 ```
 
 ## 数据库表
 
 | 表 | 用途 |
 |----|------|
-| `auth_tenant`             | 租户（隔离模式、Schema、LDAP 配置） |
-| `auth_user`               | 用户（BCrypt 密码、MFA 密钥、锁定状态） |
-| `auth_role`               | 角色 |
-| `auth_permission`         | 权限（API/MENU/BUTTON/DATA + SpEL） |
-| `auth_user_role`          | 用户-角色多对多 |
-| `auth_role_permission`    | 角色-权限多对多 |
-| `auth_oauth2_client`      | 注册客户端 |
-| `auth_refresh_token`      | 刷新令牌（轮换 + 撤销） |
-| `auth_audit_log`          | 审计日志（SHA-256 哈希链） |
-| `auth_social_binding`     | 社交账号绑定 |
-| `auth_saml_idp_registration` | SAML IdP 多租户注册 |
-| `auth_api_key`            | API Key |
-| `admin_system_config`     | 系统配置（KV） |
+| `auth_tenant` | 租户（隔离模式、Schema、LDAP 配置） |
+| `auth_user` | 用户（BCrypt 密码、MFA 密钥、锁定状态） |
+| `auth_role` | 角色 |
+| `auth_permission` | 权限（API/MENU/BUTTON/DATA + SpEL） |
+| `auth_user_role` | 用户-角色多对多 |
+| `auth_role_permission` | 角色-权限多对多 |
+| `auth_oauth2_client` | 注册客户端（含 id_token_claims 自定义声明） |
+| `auth_refresh_token` | 刷新令牌（轮换 + 撤销） |
+| `auth_audit_log` | 审计日志（SHA-256 哈希链） |
+| `auth_social_binding` | 社交账号绑定 |
+| `auth_saml_idp_registration` | SAML IdP 多租户注册（含证书、nameIdFormat、metadata 自动刷新） |
+| `auth_api_key` | API Key |
+| `auth_scim_group` | SCIM 2.0 用户组 |
+| `auth_scim_group_member` | SCIM 2.0 组成员（内部/外部成员） |
+| `auth_scim_token` | SCIM Provisioner Bearer Token |
+| `admin_system_config` | 系统配置（KV，运行时热更新） |
+| `admin_ldap_group_role_mapping` | LDAP 用户组 → 角色映射 |
 
 ## 安全要点
 
@@ -451,8 +486,8 @@ java -jar backend/iam-admin/target/boot/iam-admin.jar --spring.profiles.active=p
 
 ## 升级路径
 
-已落地：RS256 + JWKS · ABAC SpEL · Schema-per-tenant · 按租户多 LDAP · 短信/Magic/支付宝 SDK · JPA SAML IdP 注册。
-待接入：WebAuthn · Kerberos · SCIM 2.0 全 CRUD · 支付宝生产依赖显式引入。
+已落地：RS256 + JWKS · ABAC SpEL · Schema-per-tenant · 多租户 LDAP · LDAP Group→Role 映射 · SCIM 2.0 全 CRUD · SCIM Bearer Token · SAML 多 IdP 注册 + metadata 自动刷新 · SMS/Magic/支付宝 SDK · JPA · DynamicConfig 运行时热更新。
+待接入：WebAuthn · Kerberos · 支付宝生产依赖显式引入。
 
 ## 许可
 

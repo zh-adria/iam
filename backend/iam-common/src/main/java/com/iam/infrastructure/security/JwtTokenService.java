@@ -101,7 +101,8 @@ public class JwtTokenService {
     }
 
     public String issueIdToken(Long userId, String subject, String clientId, String nonce,
-                               String email, String preferredUsername, String tenant) {
+                               String email, String preferredUsername, String tenant,
+                               Map<String, Object> extraClaims) {
         Instant now = Instant.now();
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", subject);
@@ -113,6 +114,7 @@ public class JwtTokenService {
         if (email != null) claims.put("email", email);
         if (preferredUsername != null) claims.put("preferred_username", preferredUsername);
         if (tenant != null) claims.put("tenant", tenant);
+        if (extraClaims != null) claims.putAll(extraClaims);
         claims.put("jti", UUID.randomUUID().toString());
         return Jwts.builder()
                 .setClaims(claims)

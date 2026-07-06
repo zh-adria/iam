@@ -22,9 +22,11 @@ class OAuth2ControllerTest {
         req.setScheme("http");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(req));
 
+        JwtTokenService jwt = org.mockito.Mockito.mock(JwtTokenService.class);
+        org.mockito.Mockito.when(jwt.issuer()).thenReturn("http://localhost:8080/iam/oauth");
         OAuth2Controller ctrl = new OAuth2Controller(
                 org.mockito.Mockito.mock(OAuth2AuthService.class),
-                org.mockito.Mockito.mock(JwtTokenService.class));
+                jwt);
         Map<String, Object> result = ctrl.discovery(req);
         String issuer = (String) result.get("issuer");
         assertNotNull(issuer);

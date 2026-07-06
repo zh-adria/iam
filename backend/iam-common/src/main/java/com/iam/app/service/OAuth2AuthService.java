@@ -14,6 +14,7 @@ import com.iam.infrastructure.security.JwtTokenService;
 import com.iam.infrastructure.security.PasswordHasher;
 import com.iam.infrastructure.security.TokenCacheService;
 import io.jsonwebtoken.Claims;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * OAuth2 Authorization Server: authorization_code (with PKCE), refresh_token, password, client_credentials.
@@ -54,11 +56,11 @@ public class OAuth2AuthService {
     @Transactional
     public String authorize(String clientId, String redirectUri, String scope, String state,
                             String codeChallenge, String codeChallengeMethod, String nonce,
-                            Long userId, String username, String tenantCode) {
+                            Long userId, String username, String tenantCode, String claims) {
         OAuth2ClientEntity c = validateClient(clientId, null, "authorization_code", redirectUri);
         String scopes = intersectScopes(c.getScopes(), scope);
         String code = codeStore.issue(userId, clientId, redirectUri, scopes,
-                codeChallenge, codeChallengeMethod, nonce);
+                codeChallenge, codeChallengeMethod, nonce, claims);
         audit.record(userId, tenantCode, "OAUTH_AUTHORIZE", "SUCCESS", username, null,
                 "client=" + clientId + " scope=" + scopes + (codeChallenge != null ? " pkce=S256" : ""));
         return code;
@@ -136,6 +138,17 @@ public class OAuth2AuthService {
     @Transactional
     public void revoke(String token, String clientId, String clientSecret) {
         if (clientId != null) validateClient(clientId, clientSecret, null, null);
+        revokeToken(token);
+    }
+
+    /** OIDC logout: revoke an access token by its JWT string. */
+    public void logout(String token) {
+        revokeToken(token);
+    }
+
+    private void revokeToken(String token) {
+        if (token == null || token.isEmpty()) return;
+        // try refresh token first
         var rt = refreshRepo.findByToken(token).orElse(null);
         if (rt != null) {
             rt.setRevokedAt(Instant.now());
@@ -232,10 +245,22 @@ public class OAuth2AuthService {
                 .build();
         // OIDC id_token when openid scope present
         if (includeIdToken && scopes != null && scopes.contains("openid")) {
+            Map<String, Object> extra = parseExtraClaims(clientId);
             tr.setIdToken(jwt.issueIdToken(u.getId(), u.getUsername(), clientId, nonce,
-                    u.getEmail(), u.getUsername(), u.getTenantCode()));
+                    u.getEmail(), u.getUsername(), u.getTenantCode(), extra));
         }
         return tr;
+    }
+
+    private Map<String, Object> parseExtraClaims(String clientId) {
+        try {
+            OAuth2ClientEntity c = clientRepo.findById(clientId).orElse(null);
+            if (c == null || c.getIdTokenClaims() == null || c.getIdTokenClaims().isBlank()) return null;
+            return new ObjectMapper().readValue(c.getIdTokenClaims(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse id_token_claims for client {}: {}", clientId, e.getMessage());
+            return null;
+        }
     }
 
     private Map<String, Object> toTokenMap(TokenResponse r) {
@@ -279,6 +304,54 @@ public class OAuth2AuthService {
         Set<String> want = new HashSet<>(Arrays.asList(requested.split("[ ,]")));
         want.retainAll(allowed);
         return String.join(",", want);
+    }
+
+    @Transactional
+    public Map<String, Object> register(Map<String, Object> body) {
+        String clientId = (String) body.getOrDefault("client_id", "cli_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+        if (clientRepo.existsById(clientId)) {
+            throw new AuthException("DUP_CLIENT", "client_id already exists: " + clientId);
+        }
+        String secretRaw = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "");
+        List<String> grants = body.containsKey("grant_types") && body.get("grant_types") instanceof List
+                ? (List<String>) body.get("grant_types") : List.of("authorization_code");
+        List<String> redirects = body.containsKey("redirect_uris") && body.get("redirect_uris") instanceof List
+                ? (List<String>) body.get("redirect_uris") : List.of();
+        List<String> scopes = body.containsKey("scope") && body.get("scope") instanceof String
+                ? Arrays.asList(((String) body.get("scope")).split(" ")) : List.of("openid");
+        if (scopes.isEmpty()) scopes = List.of("openid");
+
+        OAuth2ClientEntity c = OAuth2ClientEntity.builder()
+                .clientId(clientId)
+                .clientSecretHash(hasher.encode(secretRaw))
+                .grantTypes(String.join(",", grants))
+                .redirectUris(String.join(",", redirects))
+                .scopes(String.join(",", scopes))
+                .autoApprove(false)
+                .build();
+        clientRepo.save(c);
+
+        Map<String, Object> r = new HashMap<>();
+        r.put("client_id", clientId);
+        r.put("client_secret", secretRaw);
+        r.put("client_name", body.get("client_name"));
+        r.put("redirect_uris", redirects);
+        r.put("grant_types", grants);
+        r.put("scope", String.join(" ", scopes));
+        r.put("token_endpoint_auth_method", "client_secret_post");
+        return r;
+    }
+
+    public Map<String, Object> clientMetadata(String clientId) {
+        OAuth2ClientEntity c = clientRepo.findById(clientId)
+                .orElseThrow(() -> new AuthException("CLIENT_NOT_FOUND", "客户端不存在"));
+        Map<String, Object> m = new HashMap<>();
+        m.put("client_id", c.getClientId());
+        m.put("grant_types", Arrays.asList(c.getGrantTypes().split(",")));
+        m.put("redirect_uris", Arrays.asList(c.getRedirectUris() == null ? "" : c.getRedirectUris().split(",")));
+        m.put("scope", c.getScopes());
+        m.put("token_endpoint_auth_method", "client_secret_post");
+        return m;
     }
 
 }

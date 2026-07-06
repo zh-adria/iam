@@ -51,4 +51,33 @@ public class SamlIdpRegistrationEntity {
     @Column(name = "enabled", nullable = false)
     @lombok.Builder.Default
     private Boolean enabled = true;
+
+    /** SP signing certificate (PEM), used to sign AuthnRequest */
+    @Lob
+    @Column(name = "signing_cert_pem")
+    private String signingCertPem;
+
+    /** SP encryption certificate (PEM), used to encrypt Assertion */
+    @Lob
+    @Column(name = "encryption_cert_pem")
+    private String encryptionCertPem;
+
+    /** SAML NameID format (default: persistent) */
+    @Column(name = "name_id_format", length = 128)
+    @lombok.Builder.Default
+    private String nameIdFormat = "urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
+
+    /** Per-IdP attribute mapping JSON: {"email":"mail","displayName":"cn"} */
+    @Lob
+    @Column(name = "attribute_mapping")
+    private String attributeMapping;
+
+    /** Last time the IdP metadata XML was refreshed from the metadata URL */
+    @Column(name = "metadata_last_refreshed_at")
+    private java.time.Instant metadataLastRefreshedAt;
+
+    /** Hours between metadata auto-refresh attempts (default: 6) */
+    @Column(name = "metadata_refresh_interval_hours")
+    @lombok.Builder.Default
+    private Integer metadataRefreshIntervalHours = 6;
 }

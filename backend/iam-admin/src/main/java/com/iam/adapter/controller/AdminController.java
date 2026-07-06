@@ -173,9 +173,17 @@ public class AdminController {
     }
 
     @PostMapping("/oauth2/clients")
-    public ApiResult<Void> upsertClient(@RequestBody Map<String, String> b) {
-        admin.upsertClient(b.get("clientId"), b.get("clientSecret"),
-                b.get("grantTypes"), b.get("redirectUris"), b.get("scopes"));
+    public ApiResult<Void> upsertClient(@RequestBody Map<String, Object> b) {
+        admin.upsertClient(
+                (String) b.get("clientId"),
+                (String) b.get("clientSecret"),
+                (String) b.get("grantTypes"),
+                (String) b.get("redirectUris"),
+                (String) b.get("scopes"),
+                b.get("accessTokenTtlMinutes") == null ? null : ((Number) b.get("accessTokenTtlMinutes")).intValue(),
+                b.get("refreshTokenTtlDays") == null ? null : ((Number) b.get("refreshTokenTtlDays")).intValue(),
+                (Boolean) b.get("autoApprove"),
+                (String) b.get("idTokenClaims"));
         return ApiResult.ok(null, "已保存");
     }
 
@@ -202,13 +210,47 @@ public class AdminController {
                 (String) b.get("idpMetadataXml"),
                 (String) b.get("spEntityId"),
                 (String) b.get("acsTemplate"),
-                (Boolean) b.get("enabled"));
+                (Boolean) b.get("enabled"),
+                (String) b.get("signingCertPem"),
+                (String) b.get("encryptionCertPem"),
+                (String) b.get("nameIdFormat"),
+                (String) b.get("attributeMapping"));
         return ApiResult.ok(null, "已保存");
     }
 
     @DeleteMapping("/saml/idps/{tenantCode}/{registrationId}")
     public ApiResult<Void> deleteSamlIdp(@PathVariable String tenantCode, @PathVariable String registrationId) {
         admin.deleteSamlIdp(tenantCode, registrationId);
+        return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- LDAP ----------
+    @PostMapping("/ldap/test")
+    public ApiResult<Map<String, Object>> testLdap(@RequestBody Map<String, Object> b) {
+        return ApiResult.ok(admin.testLdapConnection(
+                (String) b.get("url"),
+                (String) b.get("base"),
+                (String) b.get("managerDn"),
+                (String) b.get("managerPassword"),
+                Boolean.TRUE.equals(b.get("useSsl"))));
+    }
+
+    @GetMapping("/ldap/group-mappings")
+    public ApiResult<List<Map<String, Object>>> listLdapGroupMappings(@RequestParam(required = false) String tenant) {
+        return ApiResult.ok(admin.listLdapGroupMappings(tenant));
+    }
+
+    @PostMapping("/ldap/group-mappings")
+    public ApiResult<Map<String, Object>> upsertLdapGroupMapping(@RequestBody Map<String, Object> b) {
+        return ApiResult.ok(admin.upsertLdapGroupMapping(
+                (String) b.get("tenantCode"),
+                (String) b.get("ldapGroupDn"),
+                (String) b.get("roleCode")));
+    }
+
+    @DeleteMapping("/ldap/group-mappings")
+    public ApiResult<Void> deleteLdapGroupMapping(@RequestBody Map<String, Object> b) {
+        admin.deleteLdapGroupMapping((String) b.get("tenantCode"), (String) b.get("ldapGroupDn"));
         return ApiResult.ok(null, "已删除");
     }
 
@@ -245,6 +287,27 @@ public class AdminController {
     public ApiResult<Void> deleteConfig(@PathVariable String key) {
         admin.deleteSystemConfig(key);
         return ApiResult.ok(null, "已删除");
+    }
+
+    // ---------- SCIM tokens ----------
+    @GetMapping("/scim/tokens")
+    public ApiResult<List<Map<String, Object>>> listScimTokens() {
+        return ApiResult.ok(admin.listScimTokens());
+    }
+
+    @PostMapping("/scim/tokens")
+    public ApiResult<Map<String, Object>> createScimToken(@RequestBody Map<String, Object> b) {
+        String name = (String) b.get("name");
+        String tenantCode = (String) b.get("tenantCode");
+        String scope = (String) b.get("scope");
+        long ttlDays = b.containsKey("ttlDays") ? ((Number) b.get("ttlDays")).longValue() : 365L;
+        return ApiResult.ok(admin.createScimToken(name, tenantCode, scope, ttlDays));
+    }
+
+    @DeleteMapping("/scim/tokens/{id}")
+    public ApiResult<Void> revokeScimToken(@PathVariable Long id) {
+        admin.revokeScimToken(id);
+        return ApiResult.ok(null, "已吊销");
     }
 
     // ---------- api keys ----------

@@ -2,6 +2,8 @@ package com.iam;
 
 import com.iam.adapter.controller.ScimController;
 import com.iam.infrastructure.entity.UserEntity;
+import com.iam.infrastructure.repository.ScimGroupMemberRepository;
+import com.iam.infrastructure.repository.ScimGroupRepository;
 import com.iam.infrastructure.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -20,13 +22,15 @@ class ScimControllerTest {
     @Test
     void listUsers_returnsScimListResponse() {
         UserRepository repo = Mockito.mock(UserRepository.class);
-        ScimController ctrl = new ScimController(repo);
+        ScimGroupRepository groupRepo = Mockito.mock(ScimGroupRepository.class);
+        ScimController ctrl = new ScimController(repo, groupRepo, Mockito.mock(ScimGroupMemberRepository.class));
         UserEntity u = new UserEntity(); u.setId(1L); u.setUsername("alice");
         u.setPasswordHash("x"); u.setTenantCode("default"); u.setStatus(1);
         Mockito.when(repo.findAll()).thenReturn(List.of(u));
 
+        MockHttpServletRequest req = new MockHttpServletRequest();
         @SuppressWarnings("unchecked")
-        Map<String, Object> result = ctrl.listUsers(1, 20, null);
+        Map<String, Object> result = ctrl.listUsers(1, 20, null, req);
 
         assertEquals(1, result.get("totalResults"));
         @SuppressWarnings("unchecked")
@@ -40,7 +44,8 @@ class ScimControllerTest {
     @Test
     void getUser_returnsScimUser() {
         UserRepository repo = Mockito.mock(UserRepository.class);
-        ScimController ctrl = new ScimController(repo);
+        ScimGroupRepository groupRepo = Mockito.mock(ScimGroupRepository.class);
+        ScimController ctrl = new ScimController(repo, groupRepo, Mockito.mock(ScimGroupMemberRepository.class));
         UserEntity u = new UserEntity(); u.setId(5L); u.setUsername("bob");
         u.setPasswordHash("x"); u.setTenantCode("default"); u.setStatus(1); u.setEmail("bob@test");
         Mockito.when(repo.findById(5L)).thenReturn(Optional.of(u));
@@ -59,7 +64,8 @@ class ScimControllerTest {
     @Test
     void getUser_notFound_returns404() {
         UserRepository repo = Mockito.mock(UserRepository.class);
-        ScimController ctrl = new ScimController(repo);
+        ScimGroupRepository groupRepo = Mockito.mock(ScimGroupRepository.class);
+        ScimController ctrl = new ScimController(repo, groupRepo, Mockito.mock(ScimGroupMemberRepository.class));
         Mockito.when(repo.findById(99L)).thenReturn(Optional.empty());
 
         var resp = ctrl.getUser(99L);
@@ -69,7 +75,8 @@ class ScimControllerTest {
     @Test
     void createUser_returnsCreated() {
         UserRepository repo = Mockito.mock(UserRepository.class);
-        ScimController ctrl = new ScimController(repo);
+        ScimGroupRepository groupRepo = Mockito.mock(ScimGroupRepository.class);
+        ScimController ctrl = new ScimController(repo, groupRepo, Mockito.mock(ScimGroupMemberRepository.class));
         UserEntity saved = new UserEntity(); saved.setId(10L); saved.setUsername("charlie");
         saved.setPasswordHash("x"); saved.setTenantCode("default"); saved.setStatus(1);
         Mockito.when(repo.save(Mockito.any(UserEntity.class))).thenReturn(saved);
@@ -93,7 +100,8 @@ class ScimControllerTest {
     @Test
     void deleteUser_returnsNoContent() {
         UserRepository repo = Mockito.mock(UserRepository.class);
-        ScimController ctrl = new ScimController(repo);
+        ScimGroupRepository groupRepo = Mockito.mock(ScimGroupRepository.class);
+        ScimController ctrl = new ScimController(repo, groupRepo, Mockito.mock(ScimGroupMemberRepository.class));
         Mockito.when(repo.existsById(1L)).thenReturn(true);
 
         var resp = ctrl.deleteUser(1L);

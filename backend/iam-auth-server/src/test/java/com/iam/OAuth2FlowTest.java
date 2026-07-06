@@ -41,7 +41,7 @@ class OAuth2FlowTest {
         Long userId = 1L;
         String code = oauth.authorize("demo-client", "http://localhost:5173/callback",
                 "openid,profile", "xyz", null, "S256", "nonce123",
-                userId, "admin", "default");
+                userId, "admin", "default", null);
         assertNotNull(code);
 
         Map<String, Object> tok = oauth.token("authorization_code", "demo-client", "demo-secret",
@@ -56,7 +56,7 @@ class OAuth2FlowTest {
         Long userId = 1L;
         String challenge = b64url(sha256("correct-verifier"));
         String code = oauth.authorize("demo-client", "http://localhost:5173/callback",
-                "openid", "st", challenge, "S256", null, userId, "admin", "default");
+                "openid", "st", challenge, "S256", null, userId, "admin", "default", null);
         assertThrows(Exception.class, () -> oauth.token("authorization_code", "demo-client", "demo-secret",
                 code, "http://localhost:5173/callback", "wrong-verifier", null, null, null, null));
     }
@@ -66,7 +66,7 @@ class OAuth2FlowTest {
         Long userId = 1L;
         String challenge = b64url(sha256("verifier-abc"));
         String code = oauth.authorize("demo-client", "http://localhost:5173/callback",
-                "openid", "st", challenge, "S256", null, userId, "admin", "default");
+                "openid", "st", challenge, "S256", null, userId, "admin", "default", null);
         Map<String, Object> tok = oauth.token("authorization_code", "demo-client", "demo-secret",
                 code, "http://localhost:5173/callback", "verifier-abc", null, null, null, null);
         assertNotNull(tok.get("access_token"));

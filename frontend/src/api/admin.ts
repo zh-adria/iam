@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const http = axios.create({ baseURL: '/iam/admin/api', maxRedirects: 0 })
+export const http = axios.create({ baseURL: '/iam/admin/api', maxRedirects: 0 })
 
 http.interceptors.request.use(cfg => {
   const t = localStorage.getItem('access_token')
@@ -56,7 +56,7 @@ export interface UserRolesRes { id: number; roles: string[] }
 export interface RoleRow { code: string; name: string; tenant: string }
 export interface PermRow { code: string; type: string; name: string; resource: string; action: string; spel: string }
 export interface TenantRow { id: number; code: string; name: string; isolationMode: string; schemaName: string; ldapUrl: string; ldapBase: string; enabled: boolean }
-export interface ClientRow { clientId: string; grantTypes: string; redirectUris: string; scopes: string; createdAt: string }
+export interface ClientRow { clientId: string; grantTypes: string; redirectUris: string; scopes: string; createdAt: string; accessTokenTtlMinutes?: number; refreshTokenTtlDays?: number; autoApprove?: boolean; idTokenClaims?: string }
 export interface AuditRow { id: number; userId: number; tenant: string; action: string; result: string; principal: string; ip: string; detail: string; occurredAt: string; prevHash: string }
 export interface ConfigItem { key: string; value: string; type: string; description?: string }
 export interface ConfigResponse { items: ConfigItem[] }
@@ -71,6 +71,30 @@ export interface SamlIdpRow {
   spEntityId?: string
   acsTemplate?: string
   enabled?: boolean
+  signingCertPem?: string
+  encryptionCertPem?: string
+  nameIdFormat?: string
+  attributeMapping?: string
+  metadataLastRefreshedAt?: string
+}
+
+export interface ScimTokenRow {
+  id: number
+  name: string
+  tokenPrefix: string
+  tenantCode?: string
+  scope?: string
+  enabled: boolean
+  expiresAt: string
+  lastUsedAt?: string
+  createdAt: string
+}
+
+export interface ScimGroupRow {
+  id: string
+  displayName: string
+  externalId?: string
+  members: Array<{ value: string; display: string }>
 }
 
 export const adminApi = {
@@ -167,6 +191,18 @@ export const adminApi = {
   },
   async deleteSamlIdp(tenantCode: string, registrationId: string): Promise<void> {
     await http.delete(`/saml/idps/${encodeURIComponent(tenantCode)}/${encodeURIComponent(registrationId)}`)
+  },
+  // SCIM
+  async listScimTokens(): Promise<ScimTokenRow[]> {
+    const { data } = await http.get('/scim/tokens')
+    return data.data || []
+  },
+  async createScimToken(b: Record<string, unknown>): Promise<ScimTokenRow> {
+    const { data } = await http.post('/scim/tokens', b)
+    return data.data
+  },
+  async revokeScimToken(id: number): Promise<void> {
+    await http.delete(`/scim/tokens/${id}`)
   },
   // audit
   async listAudit(page = 1, size = 50, userId?: number): Promise<Page<AuditRow>> {

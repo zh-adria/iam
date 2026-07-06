@@ -18,6 +18,9 @@ public class EncryptedPropertyEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        if (isTestProfile(environment)) {
+            return;
+        }
         Map<String, Object> decrypted = new LinkedHashMap<>();
         for (PropertySource<?> propertySource : environment.getPropertySources()) {
             if (!(propertySource instanceof EnumerablePropertySource<?> enumerable)) {
@@ -46,5 +49,15 @@ public class EncryptedPropertyEnvironmentPostProcessor implements EnvironmentPos
             throw new IllegalStateException("Encrypted configuration requires IAM_CONFIG_KEY or iam.config-key");
         }
         return key;
+    }
+
+    private static boolean isTestProfile(ConfigurableEnvironment environment) {
+        for (String profile : environment.getActiveProfiles()) {
+            if ("test".equals(profile)) {
+                return true;
+            }
+        }
+        String active = environment.getProperty("spring.profiles.active");
+        return active != null && active.contains("test");
     }
 }

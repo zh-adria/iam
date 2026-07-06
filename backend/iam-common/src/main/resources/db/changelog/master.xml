@@ -261,4 +261,77 @@
             <column name="description" value="WeCom agent id"/>
         </insert>
     </changeSet>
+    <changeSet id="005-add-oidc-client-fields" author="iam">
+        <addColumn tableName="auth_oauth2_client">
+            <column name="id_token_claims" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="006-fix-saml-missing-columns" author="iam">
+        <addColumn tableName="auth_saml_idp_registration">
+            <column name="signing_cert_pem" type="text"/>
+            <column name="encryption_cert_pem" type="text"/>
+            <column name="name_id_format" type="varchar(128)"/>
+            <column name="attribute_mapping" type="text"/>
+            <column name="metadata_last_refreshed_at" type="timestamp"/>
+            <column name="metadata_refresh_interval_hours" type="int" defaultValueNumeric="6"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="007-create-ldap-group-mapping" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="admin_ldap_group_role_mapping"/></not></preConditions>
+        <createTable tableName="admin_ldap_group_role_mapping">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="tenant_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="ldap_group_dn" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="role_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="admin_ldap_group_role_mapping" columnNames="tenant_code,ldap_group_dn"/>
+    </changeSet>
+
+    <changeSet id="008-create-scim-group-member" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="auth_scim_group_member"/></not></preConditions>
+        <createTable tableName="auth_scim_group_member">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="group_id" type="bigint"><constraints nullable="false"/></column>
+            <column name="member_type" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="user_id" type="bigint"/>
+            <column name="member_value" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="display_name" type="varchar(255)"/>
+            <column name="tenant_code" type="varchar(32)"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <createIndex indexName="idx_sgm_group" tableName="auth_scim_group_member"><column name="group_id" type="bigint"/></createIndex>
+        <addUniqueConstraint tableName="auth_scim_group_member" columnNames="group_id,member_value"/>
+    </changeSet>
+
+    <changeSet id="009-create-scim-group" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="auth_scim_group"/></not></preConditions>
+        <createTable tableName="auth_scim_group">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="external_id" type="varchar(128)"/>
+            <column name="display_name" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="members" type="text"/>
+            <column name="tenant_code" type="varchar(32)"/>
+        </createTable>
+        <addUniqueConstraint tableName="auth_scim_group" columnNames="tenant_code,external_id"/>
+    </changeSet>
+
+    <changeSet id="010-create-scim-token" author="iam">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="auth_scim_token"/></not></preConditions>
+        <createTable tableName="auth_scim_token">
+            <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true"/></column>
+            <column name="name" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="token_hash" type="varchar(255)"><constraints nullable="false"/></column>
+            <column name="token_prefix" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="tenant_code" type="varchar(32)"/>
+            <column name="scope" type="varchar(255)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true"><constraints nullable="false"/></column>
+            <column name="expires_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_used_at" type="timestamp"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="auth_scim_token" columnNames="token_prefix"/>
+    </changeSet>
 </databaseChangeLog>

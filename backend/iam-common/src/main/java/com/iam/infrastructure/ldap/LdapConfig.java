@@ -32,6 +32,10 @@ public class LdapConfig {
     private String sysBase = "";
     @Value("${iam.ldap.user-dn-pattern:uid={0},ou=people}")
     private String sysUserDnPattern = "uid={0},ou=people";
+    @Value("${iam.ldap.user-search-filter:(uid={0})}")
+    private String sysUserSearchFilter = "(uid={0})";
+    @Value("${iam.ldap.attribute-mapping:mail=email,cn=displayName}")
+    private String sysAttributeMapping = "mail=email,cn=displayName";
     @Value("${iam.ldap.manager-dn:}")
     private String sysManagerDn = "";
     @Value("${iam.ldap.manager-password:}")
@@ -68,6 +72,10 @@ public class LdapConfig {
 
     public String systemUserDnPattern() { return sysUserDnPattern; }
 
+    public String systemUserSearchFilter() { return sysUserSearchFilter; }
+
+    public String systemAttributeMapping() { return sysAttributeMapping; }
+
     public boolean isSystemEnabled() { return sysEnabled; }
 
     public String systemUrl() { return sysUrl; }
@@ -99,12 +107,13 @@ public class LdapConfig {
      * Runtime reconfiguration — used when a tenant config is created/updated or in tests.
      * Recreates the system-level template.
      */
-    public void reconfigure(String url, String base, String userDnPattern, String managerDn, String managerPassword) {
+    public void reconfigure(String url, String base, String userDnPattern, String managerDn, String managerPassword, String userSearchFilter) {
         this.sysUrl = url;
         this.sysBase = base;
         this.sysUserDnPattern = userDnPattern;
         this.sysManagerDn = managerDn;
         this.sysManagerPassword = managerPassword;
+        if (userSearchFilter != null) this.sysUserSearchFilter = userSearchFilter;
         refreshSystemTemplate();
     }
 
@@ -118,6 +127,8 @@ public class LdapConfig {
         this.sysBase = dynamicConfig.getString("iam.ldap.base", sysBase == null ? "" : sysBase);
         this.sysUserDnPattern = dynamicConfig.getString("iam.ldap.user-dn-pattern",
                 sysUserDnPattern == null || sysUserDnPattern.isEmpty() ? "uid={0},ou=people" : sysUserDnPattern);
+        this.sysUserSearchFilter = dynamicConfig.getString("iam.ldap.user-search-filter",
+                sysUserSearchFilter == null || sysUserSearchFilter.isEmpty() ? "(uid={0})" : sysUserSearchFilter);
         this.sysManagerDn = dynamicConfig.getString("iam.ldap.manager-dn", sysManagerDn == null ? "" : sysManagerDn);
         this.sysManagerPassword = dynamicConfig.getString("iam.ldap.manager-password",
                 sysManagerPassword == null ? "" : sysManagerPassword);

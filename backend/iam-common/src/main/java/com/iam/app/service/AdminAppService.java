@@ -41,6 +41,9 @@ public class AdminAppService {
     private final SamlIdpRegistrationRepository samlRepo;
     private final DynamicConfig dynamicConfig;
     private final PasswordHasher hasher;
+    private final com.iam.infrastructure.ldap.LdapConfig ldapConfig;
+    private final ScimProvisionerTokenService scimTokenService;
+    private final LdapGroupRoleMappingRepository ldapGroupMappingRepo;
 
     // ---------- users ----------
     public Map<String, Object> listUsers(int page, int size, String tenant) {
@@ -267,6 +270,10 @@ public class AdminAppService {
                     m.put("redirectUris", c.getRedirectUris());
                     m.put("scopes", c.getScopes());
                     m.put("createdAt", c.getCreatedAt());
+                    m.put("accessTokenTtlMinutes", c.getAccessTokenTtlMinutes());
+                    m.put("refreshTokenTtlDays", c.getRefreshTokenTtlDays());
+                    m.put("autoApprove", c.getAutoApprove());
+                    m.put("idTokenClaims", c.getIdTokenClaims());
                     return m;
                 }).collect(Collectors.toList());
         return new PageImpl<>(rows, p, total);
@@ -274,13 +281,19 @@ public class AdminAppService {
 
     @Transactional
     public void upsertClient(String clientId, String clientSecret, String grantTypes,
-                             String redirectUris, String scopes) {
+                             String redirectUris, String scopes,
+                             Integer accessTokenTtlMinutes, Integer refreshTokenTtlDays,
+                             Boolean autoApprove, String idTokenClaims) {
         OAuth2ClientEntity c = clientRepo.findById(clientId).orElseGet(() ->
                 OAuth2ClientEntity.builder().clientId(clientId).build());
         if (clientSecret != null && !clientSecret.isEmpty()) c.setClientSecretHash(hasher.encode(clientSecret));
         if (grantTypes != null) c.setGrantTypes(grantTypes);
         if (redirectUris != null) c.setRedirectUris(redirectUris);
         if (scopes != null) c.setScopes(scopes);
+        if (accessTokenTtlMinutes != null) c.setAccessTokenTtlMinutes(accessTokenTtlMinutes);
+        if (refreshTokenTtlDays != null) c.setRefreshTokenTtlDays(refreshTokenTtlDays);
+        if (autoApprove != null) c.setAutoApprove(autoApprove);
+        if (idTokenClaims != null) c.setIdTokenClaims(idTokenClaims);
         clientRepo.save(c);
     }
 
@@ -335,7 +348,9 @@ public class AdminAppService {
     @Transactional
     public void upsertSamlIdp(String tenantCode, String registrationId, String idpEntityId,
                               String idpSsoUrl, String idpMetadataUrl, String idpMetadataXml,
-                              String spEntityId, String acsTemplate, Boolean enabled) {
+                              String spEntityId, String acsTemplate, Boolean enabled,
+                              String signingCertPem, String encryptionCertPem,
+                              String nameIdFormat, String attributeMapping) {
         SamlIdpRegistrationEntity e = samlRepo.findByTenantCodeAndRegistrationId(tenantCode, registrationId)
                 .orElseGet(() -> SamlIdpRegistrationEntity.builder()
                         .tenantCode(tenantCode).registrationId(registrationId).build());
@@ -346,6 +361,10 @@ public class AdminAppService {
         if (spEntityId != null) e.setSpEntityId(spEntityId);
         if (acsTemplate != null) e.setAcsTemplate(acsTemplate);
         if (enabled != null) e.setEnabled(enabled);
+        if (signingCertPem != null) e.setSigningCertPem(signingCertPem);
+        if (encryptionCertPem != null) e.setEncryptionCertPem(encryptionCertPem);
+        if (nameIdFormat != null) e.setNameIdFormat(nameIdFormat);
+        if (attributeMapping != null) e.setAttributeMapping(attributeMapping);
         samlRepo.save(e);
     }
 
@@ -365,6 +384,10 @@ public class AdminAppService {
         m.put("spEntityId", e.getSpEntityId());
         m.put("acsTemplate", e.getAcsTemplate());
         m.put("enabled", e.getEnabled());
+        m.put("signingCertPem", e.getSigningCertPem());
+        m.put("encryptionCertPem", e.getEncryptionCertPem());
+        m.put("nameIdFormat", e.getNameIdFormat());
+        m.put("attributeMapping", e.getAttributeMapping());
         return m;
     }
 
@@ -381,5 +404,104 @@ public class AdminAppService {
 
     public void deleteSystemConfig(String key) {
         dynamicConfig.remove(key);
+    }
+
+    // ---------- SCIM tokens ----------
+    public List<Map<String, Object>> listScimTokens() {
+        return scimTokenService.listAll();
+    }
+
+    public Map<String, Object> createScimToken(String name, String tenantCode, String scope, long ttlDays) {
+        ScimTokenEntity e = scimTokenService.createToken(name, tenantCode, scope, ttlDays);
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", e.getId());
+        m.put("name", e.getName());
+        m.put("tokenPrefix", e.getTokenPrefix());
+        m.put("token", e.getTokenHash()); // raw token, shown once
+        m.put("tenantCode", e.getTenantCode());
+        m.put("scope", e.getScope());
+        m.put("enabled", e.getEnabled());
+        m.put("expiresAt", e.getExpiresAt());
+        m.put("createdAt", e.getCreatedAt());
+        return m;
+    }
+
+    public void revokeScimToken(Long id) {
+        scimTokenService.revoke(id);
+    }
+
+    // ---------- LDAP ----------
+    public Map<String, Object> testLdapConnection(String url, String base, String managerDn, String managerPassword, boolean useSsl) {
+        Map<String, Object> r = new HashMap<>();
+        try {
+            String ldapUrl = (url != null && !url.isEmpty()) ? url : ldapConfig.systemUrl();
+            if (ldapUrl == null || ldapUrl.isEmpty()) {
+                r.put("success", false);
+                r.put("message", "LDAP URL 未配置");
+                return r;
+            }
+            String ldapBase = (base != null && !base.isEmpty()) ? base : "";
+            org.springframework.ldap.core.LdapTemplate template = ldapConfig.templateFor(ldapUrl, ldapBase);
+            if (managerDn != null && !managerDn.isEmpty() && managerPassword != null) {
+                // authenticated bind
+                javax.naming.directory.DirContext ctx = template.getContextSource().getContext(managerDn, managerPassword);
+                ctx.close();
+            } else {
+                // anonymous search
+                template.search("", "(objectClass=*)", new org.springframework.ldap.core.AttributesMapper<Object>() {
+                    @Override
+                    public Object mapFromAttributes(javax.naming.directory.Attributes attrs) {
+                        return null;
+                    }
+                });
+            }
+            // Save config on successful connection
+            dynamicConfig.set("iam.ldap.url", ldapUrl, "string");
+            dynamicConfig.set("iam.ldap.base", ldapBase, "string");
+            if (managerDn != null && !managerDn.isEmpty()) {
+                dynamicConfig.set("iam.ldap.manager-dn", managerDn, "string");
+                dynamicConfig.set("iam.ldap.manager-password", managerPassword, "secret");
+            }
+            r.put("success", true);
+            r.put("message", "连接成功");
+        } catch (Exception e) {
+            r.put("success", false);
+            r.put("message", "连接失败: " + e.getMessage());
+        }
+        return r;
+    }
+
+    // ---------- LDAP group-to-role mapping ----------
+    public List<Map<String, Object>> listLdapGroupMappings(String tenant) {
+        String tc = tenant == null || tenant.isEmpty() ? "default" : tenant;
+        return ldapGroupMappingRepo.findByTenantCode(tc).stream().map(m -> {
+            Map<String, Object> r = new HashMap<>();
+            r.put("id", m.getId());
+            r.put("tenantCode", m.getTenantCode());
+            r.put("ldapGroupDn", m.getLdapGroupDn());
+            r.put("roleCode", m.getRoleCode());
+            return r;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public Map<String, Object> upsertLdapGroupMapping(String tenantCode, String ldapGroupDn, String roleCode) {
+        var existing = ldapGroupMappingRepo.findByTenantCodeAndLdapGroupDn(tenantCode, ldapGroupDn);
+        var m = existing.stream().findFirst().orElseGet(() ->
+                com.iam.infrastructure.entity.LdapGroupRoleMappingEntity.builder()
+                        .tenantCode(tenantCode).ldapGroupDn(ldapGroupDn).build());
+        m.setRoleCode(roleCode);
+        ldapGroupMappingRepo.save(m);
+        Map<String, Object> r = new HashMap<>();
+        r.put("id", m.getId());
+        r.put("tenantCode", m.getTenantCode());
+        r.put("ldapGroupDn", m.getLdapGroupDn());
+        r.put("roleCode", m.getRoleCode());
+        return r;
+    }
+
+    @Transactional
+    public void deleteLdapGroupMapping(String tenantCode, String ldapGroupDn) {
+        ldapGroupMappingRepo.deleteByTenantCodeAndLdapGroupDn(tenantCode, ldapGroupDn);
     }
 }
