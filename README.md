@@ -161,6 +161,8 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 - `components/EmptyState.vue` — 通用空状态
 - `components/CallbackView.vue` — 回调等待页
 
+登录页：账号密码为主登录路径；短信、Magic Link、社交、企业 SSO、OAuth2 通过「其他登录方式」按钮区按需展开，展示项由 `iam.login.methods` / `iam.login.social-providers` 控制。
+
 ### Admin pane 功能
 
 | Pane | 关键能力 |

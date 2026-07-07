@@ -51,26 +51,10 @@
         <div class="auth-title">
           <span class="eyebrow">欢迎回来</span>
           <h1>登录到您的账户</h1>
-          <p class="auth-sub">选择认证方式以继续</p>
+          <p class="auth-sub">{{ tab === 'password' ? '使用账号密码登录，或选择其他认证方式。' : methodIntro }}</p>
         </div>
 
-        <!-- Tabs -->
-        <div class="tab-chip-group" role="tablist">
-          <button
-            v-for="t in tabs"
-            :key="t.key"
-            :class="['tab-chip', { active: tab === t.key }]"
-            role="tab"
-            :aria-selected="tab === t.key"
-            @click="tab = t.key"
-          >
-            <span class="chip-icon" v-html="t.icon" />
-            {{ t.label }}
-          </button>
-        </div>
-
-        <!-- ── Password ── -->
-        <div v-show="tab === 'password'" class="tab-content">
+        <div v-if="passwordEnabled && tab === 'password'" class="primary-login">
           <form @submit.prevent="onLogin" novalidate>
             <div class="field">
               <label class="field-label">租户</label>
@@ -90,9 +74,31 @@
           </form>
         </div>
 
-        <!-- ── SMS ── -->
-        <div v-show="tab === 'sms'" class="tab-content">
-          <form @submit.prevent="onSmsLogin">
+        <section v-if="secondaryMethods.length" class="method-section">
+          <div class="method-section-head">
+            <span>其他登录方式</span>
+            <button v-if="passwordEnabled && tab !== 'password'" class="text-btn" @click="tab = 'password'">账号密码登录</button>
+          </div>
+          <div class="method-grid">
+            <button
+              v-for="method in secondaryMethods"
+              :key="method.key"
+              :class="['method-btn', { active: tab === method.key }]"
+              @click="selectMethod(method.key)"
+            >
+              <span class="method-icon" v-html="method.icon" />
+              <span>{{ method.label }}</span>
+            </button>
+          </div>
+        </section>
+
+        <section v-if="tab !== 'password'" class="method-panel">
+          <div class="method-panel-title">
+            <span class="method-icon large" v-html="currentMethod?.icon" />
+            <span>{{ currentMethod?.label }}</span>
+          </div>
+
+          <form v-if="tab === 'sms'" @submit.prevent="onSmsLogin">
             <div class="field">
               <label class="field-label">手机号</label>
               <el-input v-model="smsForm.phone" placeholder="输入手机号" />
@@ -108,11 +114,8 @@
             </div>
             <el-button type="primary" class="submit-btn" :loading="loading" @click="onSmsLogin">登录</el-button>
           </form>
-        </div>
 
-        <!-- ── Magic Link ── -->
-        <div v-show="tab === 'magic'" class="tab-content">
-          <form @submit.prevent="onMagicSend">
+          <form v-else-if="tab === 'magic'" @submit.prevent="onMagicSend">
             <div class="field">
               <label class="field-label">邮箱</label>
               <el-input v-model="magicEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -120,23 +123,19 @@
             <el-button type="primary" class="submit-btn" :loading="loading" @click="onMagicSend">发送登录链接</el-button>
             <p class="tab-hint">链接将发送到您的邮箱，stub 模式下会打印在后端控制台</p>
           </form>
-        </div>
 
-        <!-- ── Social ── -->
-        <div v-show="tab === 'social'" class="tab-content">
-          <div v-if="socialProviders.length" class="social-grid">
-            <button v-for="p in socialProviders" :key="p.id" class="social-btn" @click="social(p.id)">
-              <span v-html="p.icon" />
-              <span>{{ p.name }}</span>
-            </button>
+          <div v-else-if="tab === 'social'">
+            <div v-if="socialProviders.length" class="social-grid">
+              <button v-for="p in socialProviders" :key="p.id" class="social-btn" @click="social(p.id)">
+                <span v-html="p.icon" />
+                <span>{{ p.name }}</span>
+              </button>
+            </div>
+            <p v-else class="tab-hint">当前未启用社交登录提供商</p>
+            <p class="tab-hint">需在 application.yml 配置对应 appId/appSecret</p>
           </div>
-          <p v-else class="tab-hint">当前未启用社交登录提供商</p>
-          <p class="tab-hint">需在 application.yml 配置对应 appId/appSecret</p>
-        </div>
 
-        <!-- ── SSO ── -->
-        <div v-show="tab === 'sso'" class="tab-content">
-          <div class="sso-stack">
+          <div v-else-if="tab === 'sso'" class="sso-stack">
             <el-button @click="casLogin" class="sso-btn">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
               CAS SSO
@@ -145,18 +144,17 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
               SAML 2.0
             </el-button>
+            <p class="tab-hint">需配置 iam.cas.server-url / iam.saml.idp.*</p>
           </div>
-          <p class="tab-hint">需配置 iam.cas.server-url / iam.saml.idp.*</p>
-        </div>
 
-        <!-- ── OAuth2 ── -->
-        <div v-show="tab === 'oauth2'" class="tab-content">
-          <p class="tab-hint">演示客户端：<code>demo-client</code></p>
-          <el-button type="primary" @click="oauth2Authorize" class="submit-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-            跳转 OAuth2 授权
-          </el-button>
-        </div>
+          <div v-else-if="tab === 'oauth2'">
+            <p class="tab-hint">演示客户端：<code>demo-client</code></p>
+            <el-button type="primary" @click="oauth2Authorize" class="submit-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+              跳转 OAuth2 授权
+            </el-button>
+          </div>
+        </section>
 
         <div class="auth-foot">
           <span>© 2026 IAM Platform</span>
@@ -191,13 +189,16 @@ const DEFAULT_SOCIAL_PROVIDERS = ['wechat', 'alipay', 'qq', 'dingtalk', 'wecom']
 const enabledMethods = ref<string[]>([...DEFAULT_LOGIN_METHODS])
 const enabledSocialProviders = ref<string[]>([...DEFAULT_SOCIAL_PROVIDERS])
 
-const allTabs = [
-  { key: 'password', label: '密码', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' },
-  { key: 'sms', label: '短信', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>' },
-  { key: 'magic', label: 'Magic Link', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>' },
-  { key: 'social', label: '社交', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>' },
-  { key: 'sso', label: '企业 SSO', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' },
-  { key: 'oauth2', label: 'OAuth2', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>' },
+type LoginMethodKey = 'password' | 'sms' | 'magic' | 'social' | 'sso' | 'oauth2'
+type LoginMethod = { key: LoginMethodKey; label: string; intro: string; icon: string }
+
+const allTabs: LoginMethod[] = [
+  { key: 'password', label: '账号密码', intro: '输入租户、用户名和密码完成登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' },
+  { key: 'sms', label: '短信验证码', intro: '通过手机号和一次性验证码登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>' },
+  { key: 'magic', label: 'Magic Link', intro: '接收邮件登录链接后完成免密登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>' },
+  { key: 'social', label: '社交登录', intro: '使用已配置的第三方身份提供商登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>' },
+  { key: 'sso', label: '企业 SSO', intro: '跳转到企业身份提供商完成单点登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>' },
+  { key: 'oauth2', label: 'OAuth2', intro: '跳转到授权端点完成 OAuth2/OIDC 登录。', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>' },
 ]
 
 const tabs = computed(() => {
@@ -205,6 +206,10 @@ const tabs = computed(() => {
   const filtered = allTabs.filter(t => enabled.has(t.key))
   return filtered.length ? filtered : allTabs.filter(t => t.key === 'password')
 })
+const passwordEnabled = computed(() => tabs.value.some(t => t.key === 'password'))
+const secondaryMethods = computed(() => tabs.value.filter(t => t.key !== 'password'))
+const currentMethod = computed(() => tabs.value.find(t => t.key === tab.value))
+const methodIntro = computed(() => currentMethod.value?.intro || '选择认证方式以继续。')
 
 const allSocialProviders = [
   { id: 'wechat', name: '微信', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="10" r="1.5" fill="currentColor"/><path d="M12 16c-3.5 0-6-2-6-4.5S8.5 7 12 7s6 2 6 4.5c0 1.2-.7 2.3-1.8 3.2L17 17l-2.5-1.4c-.8.2-1.6.4-2.5.4z"/></svg>' },
@@ -224,18 +229,21 @@ async function loadLoginOptions(): Promise<void> {
     const options = await api.loginOptions()
     enabledMethods.value = normalizeKeys(options.methods, DEFAULT_LOGIN_METHODS)
     enabledSocialProviders.value = normalizeKeys(options.socialProviders, DEFAULT_SOCIAL_PROVIDERS)
-    if (!enabledMethods.value.includes(tab.value)) {
-      tab.value = tabs.value[0]?.key || 'password'
-    }
+    tab.value = enabledMethods.value.includes('password') ? 'password' : (tabs.value[0]?.key || 'password')
   } catch (e) {
     enabledMethods.value = [...DEFAULT_LOGIN_METHODS]
     enabledSocialProviders.value = [...DEFAULT_SOCIAL_PROVIDERS]
+    tab.value = 'password'
   }
 }
 
 function normalizeKeys(value: string[] | undefined, fallback: string[]): string[] {
   const keys = (value || []).map(v => String(v).trim()).filter(Boolean)
   return keys.length ? [...new Set(keys)] : [...fallback]
+}
+
+function selectMethod(key: string): void {
+  tab.value = key
 }
 
 async function onLogin(): Promise<void> {
@@ -479,7 +487,90 @@ onMounted(loadLoginOptions)
 }
 
 /* ── Form (stacked labels avoid the el-form-item misalignment issue) ── */
-.tab-content { padding-top: 4px; }
+.primary-login { padding-top: 2px; }
+.method-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.method-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.text-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.method-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+}
+.method-btn:hover,
+.method-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.method-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.method-icon :deep(svg) { width: 18px; height: 18px; }
+.method-icon.large {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+.method-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.method-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  font-weight: 700;
+}
 .field { margin-bottom: 16px; }
 .field-label {
   display: block;
@@ -570,6 +661,7 @@ onMounted(loadLoginOptions)
 }
 @media (max-width: 480px) {
   .hero-features { gap: 12px; }
+  .method-grid { grid-template-columns: 1fr; }
   .social-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
