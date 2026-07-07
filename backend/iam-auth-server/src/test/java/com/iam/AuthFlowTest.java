@@ -28,6 +28,7 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = IamAuthServerApplication.class)
@@ -77,6 +78,15 @@ class AuthFlowTest {
                 .andExpect(header().string("Set-Cookie", containsString("IAM_ACCESS_TOKEN=")))
                 .andExpect(header().string("Set-Cookie", containsString("HttpOnly")))
                 .andExpect(header().string("Set-Cookie", containsString("SameSite=Lax")));
+    }
+
+    @Test
+    void loginOptions_returnsConfigurableLoginMethods() throws Exception {
+        mockMvc.perform(get("/api/auth/login-options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.methods[0]").value("password"))
+                .andExpect(jsonPath("$.data.methods[1]").value("sms"))
+                .andExpect(jsonPath("$.data.socialProviders[0]").value("wechat"));
     }
 
     @Test

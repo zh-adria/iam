@@ -13,12 +13,12 @@
         </div>
 
         <h2 class="hero-title">统一身份<br/>与访问管理</h2>
-        <p class="hero-sub">一个控制台，管理用户、角色、权限、OAuth2、SAML 与 15 种认证协议。</p>
+        <p class="hero-sub">一个控制台，管理用户、角色、权限、OAuth2 / OIDC、SAML、LDAP 与多种登录方式。</p>
 
         <ul class="hero-features">
           <li>
             <span class="feat-dot" />
-            <span><b>15+ 认证协议</b>，LDAP / SAML / OIDC / CAS / SCIM 全覆盖</span>
+            <span><b>多协议认证</b>，账密、MFA、OAuth2/OIDC、SAML、LDAP/AD、CAS、SCIM、短信、Magic Link、社交登录</span>
           </li>
           <li>
             <span class="feat-dot" />
@@ -124,12 +124,13 @@
 
         <!-- ── Social ── -->
         <div v-show="tab === 'social'" class="tab-content">
-          <div class="social-grid">
+          <div v-if="socialProviders.length" class="social-grid">
             <button v-for="p in socialProviders" :key="p.id" class="social-btn" @click="social(p.id)">
               <span v-html="p.icon" />
               <span>{{ p.name }}</span>
             </button>
           </div>
+          <p v-else class="tab-hint">当前未启用社交登录提供商</p>
           <p class="tab-hint">需在 application.yml 配置对应 appId/appSecret</p>
         </div>
 
@@ -168,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useRoute } from 'vue-router'
@@ -184,7 +185,13 @@ const magicEmail = ref('')
 const smsCountdown = ref(0)
 const touched = ref<Record<string, boolean>>({})
 
-const tabs = [
+const DEFAULT_LOGIN_METHODS = ['password', 'sms', 'magic', 'social', 'sso', 'oauth2']
+const DEFAULT_SOCIAL_PROVIDERS = ['wechat', 'alipay', 'qq', 'dingtalk', 'wecom']
+
+const enabledMethods = ref<string[]>([...DEFAULT_LOGIN_METHODS])
+const enabledSocialProviders = ref<string[]>([...DEFAULT_SOCIAL_PROVIDERS])
+
+const allTabs = [
   { key: 'password', label: '密码', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>' },
   { key: 'sms', label: '短信', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>' },
   { key: 'magic', label: 'Magic Link', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>' },
@@ -193,13 +200,43 @@ const tabs = [
   { key: 'oauth2', label: 'OAuth2', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>' },
 ]
 
-const socialProviders = [
+const tabs = computed(() => {
+  const enabled = new Set(enabledMethods.value)
+  const filtered = allTabs.filter(t => enabled.has(t.key))
+  return filtered.length ? filtered : allTabs.filter(t => t.key === 'password')
+})
+
+const allSocialProviders = [
   { id: 'wechat', name: '微信', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="10" r="1.5" fill="currentColor"/><circle cx="16" cy="10" r="1.5" fill="currentColor"/><path d="M12 16c-3.5 0-6-2-6-4.5S8.5 7 12 7s6 2 6 4.5c0 1.2-.7 2.3-1.8 3.2L17 17l-2.5-1.4c-.8.2-1.6.4-2.5.4z"/></svg>' },
   { id: 'alipay', name: '支付宝', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v16H4z" stroke="none"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>' },
   { id: 'qq', name: 'QQ', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 18c0-2 2.5-4 6-4s6 2 6 4"/></svg>' },
   { id: 'dingtalk', name: '钉钉', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="none"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' },
   { id: 'wecom', name: '企业微信', icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="9" height="9" rx="2"/><rect x="13" y="2" width="9" height="9" rx="2"/><rect x="2" y="13" width="9" height="9" rx="2"/><rect x="13" y="13" width="9" height="9" rx="2"/></svg>' },
 ]
+
+const socialProviders = computed(() => {
+  const enabled = new Set(enabledSocialProviders.value)
+  return allSocialProviders.filter(p => enabled.has(p.id))
+})
+
+async function loadLoginOptions(): Promise<void> {
+  try {
+    const options = await api.loginOptions()
+    enabledMethods.value = normalizeKeys(options.methods, DEFAULT_LOGIN_METHODS)
+    enabledSocialProviders.value = normalizeKeys(options.socialProviders, DEFAULT_SOCIAL_PROVIDERS)
+    if (!enabledMethods.value.includes(tab.value)) {
+      tab.value = tabs.value[0]?.key || 'password'
+    }
+  } catch (e) {
+    enabledMethods.value = [...DEFAULT_LOGIN_METHODS]
+    enabledSocialProviders.value = [...DEFAULT_SOCIAL_PROVIDERS]
+  }
+}
+
+function normalizeKeys(value: string[] | undefined, fallback: string[]): string[] {
+  const keys = (value || []).map(v => String(v).trim()).filter(Boolean)
+  return keys.length ? [...new Set(keys)] : [...fallback]
+}
 
 async function onLogin(): Promise<void> {
   touched.value = { ...touched.value, username: true, password: true }
@@ -291,6 +328,8 @@ function oauth2Authorize(): void {
   const url = `/iam/oauth/authorize?response_type=code&client_id=demo-client&redirect_uri=${encodeURIComponent('http://localhost:5173/callback')}&scope=openid`
   location.href = url
 }
+
+onMounted(loadLoginOptions)
 </script>
 
 <style scoped>

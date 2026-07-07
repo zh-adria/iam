@@ -97,6 +97,13 @@ export interface ScimGroupRow {
   members: Array<{ value: string; display: string }>
 }
 
+export interface LdapGroupMappingRow {
+  id: number
+  tenantCode: string
+  ldapGroupDn: string
+  roleCode: string
+}
+
 export const adminApi = {
   // users
   async listUsers(page = 1, size = 20, tenant?: string): Promise<Page<UserRow>> {
@@ -203,6 +210,18 @@ export const adminApi = {
   },
   async revokeScimToken(id: number): Promise<void> {
     await http.delete(`/scim/tokens/${id}`)
+  },
+  // LDAP group-to-role mappings
+  async listLdapGroupMappings(tenant?: string): Promise<LdapGroupMappingRow[]> {
+    const { data } = await http.get('/ldap/group-mappings', { params: tenant ? { tenant } : {} })
+    return data.data || []
+  },
+  async upsertLdapGroupMapping(b: Pick<LdapGroupMappingRow, 'tenantCode' | 'ldapGroupDn' | 'roleCode'>): Promise<LdapGroupMappingRow> {
+    const { data } = await http.post('/ldap/group-mappings', b)
+    return data.data
+  },
+  async deleteLdapGroupMapping(tenantCode: string, ldapGroupDn: string): Promise<void> {
+    await http.delete('/ldap/group-mappings', { data: { tenantCode, ldapGroupDn } })
   },
   // audit
   async listAudit(page = 1, size = 50, userId?: number): Promise<Page<AuditRow>> {

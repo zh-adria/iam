@@ -4,6 +4,7 @@ import com.iam.app.dto.ApiResult;
 import com.iam.app.dto.LoginCommand;
 import com.iam.app.dto.TokenResponse;
 import com.iam.app.service.AuthAppService;
+import com.iam.infrastructure.config.DynamicConfig;
 import com.iam.infrastructure.security.IamPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -12,12 +13,19 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private static final String DEFAULT_LOGIN_METHODS = "password,sms,magic,social,sso,oauth2";
+    private static final String DEFAULT_SOCIAL_PROVIDERS = "wechat,alipay,qq,dingtalk,wecom";
 
     private final AuthAppService auth;
     private final com.iam.app.service.LdapAuthService ldapAuth;
@@ -25,6 +33,15 @@ public class AuthController {
     private final com.iam.app.service.SmsCodeService sms;
     private final com.iam.app.service.MagicLinkService magic;
     private final com.iam.app.service.CasAuthService cas;
+    private final DynamicConfig dynamicConfig;
+
+    @GetMapping("/login-options")
+    public ApiResult<Map<String, Object>> loginOptions() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("methods", csv(dynamicConfig.getString("iam.login.methods", DEFAULT_LOGIN_METHODS)));
+        data.put("socialProviders", csv(dynamicConfig.getString("iam.login.social-providers", DEFAULT_SOCIAL_PROVIDERS)));
+        return ApiResult.ok(data);
+    }
 
     @PostMapping("/login")
     public ApiResult<TokenResponse> login(@RequestBody LoginCommand cmd, HttpServletRequest req, HttpServletResponse res) {
@@ -138,5 +155,13 @@ public class AuthController {
         if (res != null) {
             res.addHeader("Set-Cookie", "IAM_ACCESS_TOKEN=; Max-Age=0; Path=/iam; HttpOnly; SameSite=Lax");
         }
+    }
+
+    private List<String> csv(String value) {
+        return Arrays.stream((value == null ? "" : value).split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
     }
 }

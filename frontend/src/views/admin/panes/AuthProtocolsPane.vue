@@ -262,6 +262,16 @@ const samlForm = reactive<SamlIdpRow>({
 
 const configGroups: ConfigGroup[] = [
   {
+    key: 'login',
+    title: '登录页',
+    desc: '登录方式展示与社交按钮顺序',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
+    fields: [
+      { key: 'iam.login.methods', label: '登录方式', type: 'string', required: true, placeholder: 'password,sms,magic,social,sso,oauth2' },
+      { key: 'iam.login.social-providers', label: '社交按钮', type: 'string', placeholder: 'wechat,alipay,qq,dingtalk,wecom' }
+    ]
+  },
+  {
     key: 'cas',
     title: 'CAS',
     desc: '企业单点登录服务端配置',

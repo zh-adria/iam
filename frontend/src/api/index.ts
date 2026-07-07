@@ -11,6 +11,11 @@ export interface LoginResp {
   permissions?: string[]
 }
 
+export interface LoginOptions {
+  methods: string[]
+  socialProviders: string[]
+}
+
 // 后端 Spring Security 在部分场景（未认证、SAML 跳转）会返回 302 重定向。
 // 让浏览器/XHR 不顺从，直接暴露真实 status code，便于排查显示错误提示。
 const http = axios.create({ baseURL: '/iam/api', maxRedirects: 0 })
@@ -41,6 +46,10 @@ export const api = {
     // ponytail: 登录请求强制无 token，避免残留旧 token 导致 Spring Security 拒请求(401/403) 或走错 auth 路径。
     const { data } = await http.post('/auth/login', { grantType: 'password', clientId: 'iam-self', ...payload },
       { headers: { Authorization: '' } })
+    return data.data
+  },
+  async loginOptions(): Promise<LoginOptions> {
+    const { data } = await http.get('/auth/login-options')
     return data.data
   },
   async verifyMfa(mfaToken: string, code: string): Promise<LoginResp> {

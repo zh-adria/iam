@@ -1,6 +1,6 @@
 # IAM 统一身份认证与授权平台
 
-> 版本：1.2.0 · 更新：2026-07-05
+> 版本：1.3.0 · 更新：2026-07-07
 
 基于 **Alibaba Cola 4.0 四层架构**（适配器 / 应用 / 领域 / 基础设施）+ Spring Boot 2.7 + Spring Security + OAuth2 + JPA 构建的统一身份认证与授权平台。
 
@@ -82,7 +82,7 @@ OAuth2 客户端：`demo-client` / `demo-secret`
 | 模式 | 端点 | 用途 |
 |------|------|------|
 | `authserver` profile | `http://localhost:8080/iam/*` | 登录 / OAuth2 / SAML / OIDC / LDAP / CAS / 社交 / 短信 / Magic Link |
-| `admin` profile | `http://localhost:8081/iam/admin/api/*` | CRUD（用户 · 角色 · 权限 · 客户端 · 租户 · 审计 · 配置） |
+| `admin` profile | `http://localhost:8081/iam/admin/api/*` | CRUD（用户 · 角色 · 权限 · 客户端 · 租户 · LDAP 映射 · 审计 · 配置） |
 | 默认（双激活） | 上述全部 | 开发 / 测试 |
 
 ```bash
@@ -116,11 +116,11 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 | 短信验证码 / Magic Link / CAS | ✅ | 完整流程（stub 发送器） |
 | LDAP/AD 认证 | ✅ | `POST /iam/api/auth/ldap` |
 | **ABAC SpEL 求值** | ✅ | `@PreAuthorize` 注入 `#uid #tenant #roles #target #action` |
-| **审计日志（SHA-256 哈希链）** | ✅ | `iam_audit_log` |
+| **审计日志（SHA-256 哈希链）** | ✅ | `auth_audit_log` |
 | Schema-per-tenant | ✅ | `isolation_mode='SCHEMA_PER_TENANT'` |
 | 按租户多 LDAP | ✅ | `TenantEntity.ldapUrl` + 运行时 LdapTemplate 工厂 |
 | 短信 / SMTP / 支付宝 SDK | ✅ | 可插拔接口（`SmsSender` / `MagicSender`） |
-| SAML IdP 多租户注册 | ✅ | `iam_saml_idp_registration` |
+| SAML IdP 多租户注册 | ✅ | `auth_saml_idp_registration` |
 | SCIM 2.0 全 CRUD | ✅ | `/iam/scim/v2/Users`、`/Groups`（含成员） |
 | WebAuthn / Kerberos / 支付宝生产 SDK | 🔶 | 需接入三方库 |
 
@@ -170,6 +170,7 @@ java -jar iam-platform-1.0.0-SNAPSHOT.jar               # 默认开发模式
 | 权限管理 `PermsPane` | 新建 (API/MENU/BUTTON/DATA/SpEL) · 删除 · 角色授权对话框 |
 | OAuth2 客户端 `ClientsPane` | client_id / secret / grant_types **多选** / redirect_uris / scopes / 创建编辑删除 |
 | 租户管理 `TenantsPane` | SHARED / SCHEMA / DATABASE 三模式 · Schema · LDAP · 创建编辑删除 |
+| LDAP 映射 `LdapGroupMappingsPane` | 按租户管理 LDAP Group DN → Role 映射 · 创建编辑删除 |
 | 审计日志 `AuditPane` | userId 过滤 · 动作 · 结果 · 前序哈希 · 时间 |
 | 系统配置 `ConfigPane` | 认证协议开关 + KV 参数，双 tab 切换 |
 
@@ -195,6 +196,7 @@ java -jar backend/iam-auth-server/target/iam-platform-1.0.0-SNAPSHOT.jar
 
 ```
 POST   /iam/api/auth/login                { username, password, tenantCode } → TokenResponse
+GET    /iam/api/auth/login-options        # 登录页展示方式配置
 POST   /iam/api/auth/ldap                 { username, password }             → TokenResponse
 POST   /iam/api/auth/mfa/verify           { mfaToken, code }                  → TokenResponse
 POST   /iam/api/auth/refresh              { refreshToken }                    → TokenResponse
@@ -308,7 +310,7 @@ DELETE /iam/admin/api/scim/tokens/{id}
 # LDAP Group Role Mapping
 GET    /iam/admin/api/ldap/group-mappings  ?tenant
 POST   /iam/admin/api/ldap/group-mappings  { tenantCode, ldapGroupDn, roleCode }
-DELETE /iam/admin/api/ldap/group-mappings/{id}
+DELETE /iam/admin/api/ldap/group-mappings  { tenantCode, ldapGroupDn }
 ```
 
 ## 前端文件结构
@@ -340,7 +342,8 @@ frontend/
           RolesPane.vue      ← 关联权限网格
           PermsPane.vue
           ClientsPane.vue    ← grant_types 多选 / secret
-          TenantsPane.vue    ← LDAP Group→Role 映射
+          TenantsPane.vue    ← 租户 LDAP URL/Base 配置
+          LdapGroupMappingsPane.vue ← LDAP Group→Role 映射
           AuditPane.vue
           ConfigPane.vue     ← 双 tab（认证协议开关 + KV）
     router/index.ts          路由 + admin 守卫（hasRole）
@@ -357,8 +360,7 @@ com.iam/
       UserController           /api/users/*
       ScimController           /scim/v2/*
       ScimProvisionerTokenController  /admin/api/scim/tokens
-      LdapGroupRoleMappingController /admin/api/ldap/group-mappings
-      AdminController          /admin/api/*
+      AdminController          /admin/api/*（含 LDAP Group Mapping）
       StubProtocolController   WebAuthn/Kerberos stub
       GlobalExceptionHandler
   app/

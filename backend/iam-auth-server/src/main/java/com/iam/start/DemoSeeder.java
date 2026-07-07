@@ -92,6 +92,8 @@ public class DemoSeeder implements CommandLineRunner {
 
         // ponytail: seed default dynamic config for admin UI. drop-first clears table each dev start.
         dynamicConfig.seedIfAbsent(List.of(
+                new DynamicConfig.ConfigValueSpec("iam.login.methods", "string", "password,sms,magic,social,sso,oauth2", "登录页展示方式，逗号分隔: password,sms,magic,social,sso,oauth2"),
+                new DynamicConfig.ConfigValueSpec("iam.login.social-providers", "string", "wechat,alipay,qq,dingtalk,wecom", "登录页社交登录按钮，逗号分隔"),
                 new DynamicConfig.ConfigValueSpec("iam.social.qq.app-id", "string", "", "QQ 开放平台 App ID"),
                 new DynamicConfig.ConfigValueSpec("iam.social.qq.app-secret", "secret", "", "QQ 开放平台 App Secret"),
                 new DynamicConfig.ConfigValueSpec("iam.social.wechat.app-id", "string", "", "微信 App ID"),
