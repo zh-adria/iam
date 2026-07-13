@@ -46,7 +46,11 @@ management:
 
 iam:
   jwt:
-    # RS256 auto-generated RSA-2048 key on startup. Pin via iam.jwt.rsa-*-pem to stabilize.
+    # Dev uses deterministic RSA by issuer when PEM keys are empty.
+    key-id:
+    rsa-private-key-pem:
+    rsa-public-key-pem:
+    previous-public-keys:
     issuer: iam-platform
     access-ttl-minutes: 30
     refresh-ttl-days: 7

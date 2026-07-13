@@ -80,15 +80,15 @@ public class DemoSeeder implements CommandLineRunner {
         assignRole(adminId, "ROLE_ADMIN");
         assignRole(aliceId, "ROLE_USER");
 
-        if (!clients.existsById("demo-client")) {
-            clients.save(OAuth2ClientEntity.builder()
-                    .clientId("demo-client")
-                    .clientSecretHash(hasher.encode("demo-secret"))
-                    .grantTypes("authorization_code,refresh_token,password,client_credentials")
-                    .redirectUris("http://localhost:5173/callback,http://localhost:3000/callback")
-                    .scopes("openid,profile")
-                    .build());
-        }
+        String demoClientScopes = "openid,profile,iam:user:assign-role,iam:user:create,iam:user:delete,iam:role:create,iam:role:grant,iam:permission:create,iam:permission:delete,iam:client:create,iam:tenant:write,iam:config:read,iam:audit:read,iam:menu:dashboard";
+        OAuth2ClientEntity demoClient = clients.findById("demo-client").orElseGet(() -> OAuth2ClientEntity.builder()
+                .clientId("demo-client")
+                .clientSecretHash(hasher.encode("demo-secret"))
+                .build());
+        demoClient.setGrantTypes("authorization_code,refresh_token,password,client_credentials");
+        demoClient.setRedirectUris("http://localhost:5173/callback,http://localhost:3000/callback");
+        demoClient.setScopes(demoClientScopes);
+        clients.save(demoClient);
 
         // ponytail: seed default dynamic config for admin UI. drop-first clears table each dev start.
         dynamicConfig.seedIfAbsent(List.of(

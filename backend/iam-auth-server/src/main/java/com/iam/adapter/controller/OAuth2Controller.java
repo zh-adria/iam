@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -182,7 +181,7 @@ public class OAuth2Controller {
     /** RFC 7517 JWKS — returns the RSA public key(s) for RS256 verification by resource servers. */
     @GetMapping("/jwks")
     public Map<String, Object> jwks() {
-        return Map.of("keys", List.of(jwt.jwk()));
+        return Map.of("keys", jwt.jwks());
     }
 }
 

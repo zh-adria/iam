@@ -20,6 +20,12 @@
             <artifactId>iam-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.iam</groupId>
+            <artifactId>iam-sdk-java</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>

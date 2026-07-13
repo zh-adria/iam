@@ -108,6 +108,40 @@ class AuthFlowTest {
     }
 
     @Test
+    void authzCheck_usesCurrentBearerPermissions() throws Exception {
+        LoginCommand cmd = LoginCommand.builder()
+                .username("admin").password("Iam@2026")
+                .tenantCode("default").clientId("iam-self")
+                .grantType("password").ip("127.0.0.1").build();
+        TokenResponse token = auth.login(cmd);
+
+        mockMvc.perform(post("/api/authz/check")
+                        .header("Authorization", "Bearer " + token.getAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"permission\":\"iam:role:create\",\"target\":{\"tenantCode\":\"default\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.allowed").value(true))
+                .andExpect(jsonPath("$.data.permission").value("iam:role:create"))
+                .andExpect(jsonPath("$.data.sub").value("admin"));
+    }
+
+    @Test
+    void authzCheck_deniesMissingPermission() throws Exception {
+        LoginCommand cmd = LoginCommand.builder()
+                .username("alice").password("User@2026")
+                .tenantCode("default").clientId("iam-self")
+                .grantType("password").ip("127.0.0.1").build();
+        TokenResponse token = auth.login(cmd);
+
+        mockMvc.perform(post("/api/authz/check")
+                        .header("Authorization", "Bearer " + token.getAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"permission\":\"iam:role:create\",\"target\":{\"tenantCode\":\"default\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.allowed").value(false));
+    }
+
+    @Test
     void badPassword_fails_and_rates_locks() {
         for (int i = 0; i < 6; i++) {
             try {

@@ -18,6 +18,9 @@
 
     <modules>
         <module>iam-common</module>
+        <module>iam-sdk-java</module>
+        <module>iam-sdk-spring-boot-starter</module>
+        <module>iam-resource-server-demo</module>
         <module>iam-auth-server</module>
         <module>iam-admin</module>
     </modules>

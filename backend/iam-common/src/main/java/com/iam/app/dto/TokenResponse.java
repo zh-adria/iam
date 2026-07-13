@@ -16,4 +16,5 @@ public class TokenResponse {
     private String mfaToken; // short-lived token to continue login after MFA
     private List<String> roles;
     private List<String> permissions;
+    private List<String> scopes;
 }

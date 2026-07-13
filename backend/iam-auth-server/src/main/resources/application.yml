@@ -28,10 +28,14 @@ spring:
     timeout: 3000ms
 iam:
   jwt:
-    # RS256 (RSA keypair). Auto-generates a 2048-bit key on startup; configure these
-    # to pin a keypair across restarts (PEM-encoded):
-    #   iam.jwt.rsa-private-key-pem=...
-    #   iam.jwt.rsa-public-key-pem=...
+    # RS256. Dev falls back to deterministic RSA-2048 by issuer.
+    # Production must configure current keypair and a stable key id:
+    #   iam.jwt.key-id=2026-07
+    #   iam.jwt.rsa-private-key-pem=-----BEGIN PRIVATE KEY-----...
+    #   iam.jwt.rsa-public-key-pem=-----BEGIN PUBLIC KEY-----...
+    # Rotation: deploy new current keypair and keep old public keys here until all old tokens expire.
+    # Format: oldKid=PEM;;olderKid=PEM
+    previous-public-keys:
     issuer: iam-platform
     access-ttl-minutes: 30
     refresh-ttl-days: 7

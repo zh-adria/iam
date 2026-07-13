@@ -7,7 +7,9 @@ import com.iam.infrastructure.entity.RefreshTokenEntity;
 import com.iam.infrastructure.entity.UserEntity;
 import com.iam.infrastructure.repository.OAuth2ClientRepository;
 import com.iam.infrastructure.repository.RefreshTokenRepository;
+import com.iam.infrastructure.repository.RolePermissionRepository;
 import com.iam.infrastructure.repository.UserRepository;
+import com.iam.infrastructure.repository.UserRoleRepository;
 import com.iam.infrastructure.security.AuthCodeStore;
 import com.iam.infrastructure.security.AuditLogService;
 import com.iam.infrastructure.security.JwtTokenService;
@@ -46,6 +48,8 @@ public class OAuth2AuthService {
 
     private final OAuth2ClientRepository clientRepo;
     private final UserRepository userRepo;
+    private final UserRoleRepository userRoleRepo;
+    private final RolePermissionRepository rolePermRepo;
     private final RefreshTokenRepository refreshRepo;
     private final AuthCodeStore codeStore;
     private final JwtTokenService jwt;
@@ -57,7 +61,7 @@ public class OAuth2AuthService {
     public String authorize(String clientId, String redirectUri, String scope, String state,
                             String codeChallenge, String codeChallengeMethod, String nonce,
                             Long userId, String username, String tenantCode, String claims) {
-        OAuth2ClientEntity c = validateClient(clientId, null, "authorization_code", redirectUri);
+        OAuth2ClientEntity c = validateClientForAuthorize(clientId, redirectUri);
         String scopes = intersectScopes(c.getScopes(), scope);
         String code = codeStore.issue(userId, clientId, redirectUri, scopes,
                 codeChallenge, codeChallengeMethod, nonce, claims);
@@ -97,7 +101,7 @@ public class OAuth2AuthService {
 
     /** RFC 7662 introspection. */
     public Map<String, Object> introspect(String token, String clientId, String clientSecret) {
-        if (clientId != null) validateClient(clientId, clientSecret, null, null);
+        validateClient(clientId, clientSecret, null, null);
         Map<String, Object> r = new HashMap<>();
         r.put("active", false);
         if (token == null || token.isEmpty()) return r;
@@ -123,7 +127,9 @@ public class OAuth2AuthService {
             if (!revoked) {
                 r.put("client_id", c.get("cid"));
                 r.put("sub", c.getSubject());
-                r.put("scope", c.get("perms"));
+                r.put("scope", c.get("scope"));
+                r.put("roles", c.get("roles"));
+                r.put("perms", c.get("perms"));
                 r.put("exp", c.getExpiration().getTime() / 1000);
                 r.put("uid", c.get("uid"));
                 r.put("tenant", c.get("tenant"));
@@ -137,7 +143,7 @@ public class OAuth2AuthService {
     /** RFC 7009 revocation. */
     @Transactional
     public void revoke(String token, String clientId, String clientSecret) {
-        if (clientId != null) validateClient(clientId, clientSecret, null, null);
+        validateClient(clientId, clientSecret, null, null);
         revokeToken(token);
     }
 
@@ -212,22 +218,30 @@ public class OAuth2AuthService {
     private TokenResponse clientCredentialsGrant(String clientId, String clientSecret, String scope) {
         OAuth2ClientEntity c = validateClient(clientId, clientSecret, "client_credentials", null);
         String scopes = intersectScopes(c.getScopes(), scope);
-        List<String> scopeList = scopes == null || scopes.isEmpty() ? Collections.emptyList() : Arrays.asList(scopes.split(","));
-        String access = jwt.issueAccess(0L, "client:" + clientId, "system",
-                Collections.emptyList(), scopeList, clientId);
+        List<String> scopeList = splitScopes(scopes);
+        String access = jwt.issueAccessWithScopes(0L, "client:" + clientId, "system",
+                Collections.emptyList(), scopeList, scopeList, clientId);
         return TokenResponse.builder()
                 .accessToken(access).tokenType("Bearer")
                 .expiresIn(jwt.accessTtlSec()).mfaRequired(false)
                 .permissions(scopeList)
+                .scopes(scopeList)
                 .build();
     }
 
     // ---------- helpers ----------
 
     private TokenResponse issueTokenPair(UserEntity u, String clientId, String scopes, String nonce, boolean includeIdToken) {
-        List<String> scopeList = scopes == null || scopes.isEmpty() ? Collections.emptyList() : Arrays.asList(scopes.split(","));
-        String access = jwt.issueAccess(u.getId(), u.getUsername(), u.getTenantCode(),
-                Collections.emptyList(), scopeList, clientId);
+        List<String> scopeList = splitScopes(scopes);
+        List<String> roleCodes = userRoleRepo.findByUserId(u.getId()).stream()
+                .map(com.iam.infrastructure.entity.UserRoleEntity::getRoleCode)
+                .collect(java.util.stream.Collectors.toList());
+        List<String> userPerms = roleCodes.isEmpty()
+                ? Collections.emptyList()
+                : rolePermRepo.findPermCodesByRoleCodes(roleCodes);
+        List<String> tokenPerms = filterPermissionsByScopes(userPerms, scopeList);
+        String access = jwt.issueAccessWithScopes(u.getId(), u.getUsername(), u.getTenantCode(),
+                roleCodes, tokenPerms, scopeList, clientId);
         String refreshToken = java.util.UUID.randomUUID().toString().replace("-", "") + "." + Long.toHexString(u.getId());
         RefreshTokenEntity rt = RefreshTokenEntity.builder()
                 .token(refreshToken).userId(u.getId()).tenantCode(u.getTenantCode())
@@ -241,7 +255,9 @@ public class OAuth2AuthService {
         TokenResponse tr = TokenResponse.builder()
                 .accessToken(access).refreshToken(refreshToken).tokenType("Bearer")
                 .expiresIn(jwt.accessTtlSec()).mfaRequired(false)
-                .permissions(scopeList)
+                .roles(roleCodes)
+                .permissions(tokenPerms)
+                .scopes(scopeList)
                 .build();
         // OIDC id_token when openid scope present
         if (includeIdToken && scopes != null && scopes.contains("openid")) {
@@ -270,14 +286,21 @@ public class OAuth2AuthService {
         m.put("expires_in", r.getExpiresIn());
         if (r.getRefreshToken() != null) m.put("refresh_token", r.getRefreshToken());
         if (r.getIdToken() != null) m.put("id_token", r.getIdToken());
-        if (r.getPermissions() != null) m.put("scope", String.join(" ", r.getPermissions()));
+        List<String> scopes = r.getScopes() == null ? r.getPermissions() : r.getScopes();
+        if (scopes != null) m.put("scope", String.join(" ", scopes));
         return m;
     }
 
     private OAuth2ClientEntity validateClient(String clientId, String clientSecret, String grantType, String redirectUri) {
+        if (clientId == null || clientId.isBlank()) {
+            throw new AuthException("CLIENT_REQUIRED", "client_id is required");
+        }
+        if (clientSecret == null || clientSecret.isBlank()) {
+            throw new AuthException("BAD_CLIENT_SECRET", "client_secret is required");
+        }
         OAuth2ClientEntity c = clientRepo.findById(clientId)
                 .orElseThrow(() -> new AuthException("CLIENT_NOT_FOUND", "客户端不存在"));
-        if (clientSecret != null && !hasher.matches(clientSecret, c.getClientSecretHash()))
+        if (!hasher.matches(clientSecret, c.getClientSecretHash()))
             throw new AuthException("BAD_CLIENT_SECRET", "客户端密钥错误");
         if (grantType != null) {
             Set<String> grants = new HashSet<>(Arrays.asList(c.getGrantTypes().split(",")));
@@ -288,6 +311,25 @@ public class OAuth2AuthService {
             List<String> allowed = Arrays.asList(c.getRedirectUris().split(","));
             if (!allowed.contains(redirectUri))
                 throw new AuthException("REDIRECT_NOT_ALLOWED", "redirect_uri 不在白名单");
+        }
+        return c;
+    }
+
+    private OAuth2ClientEntity validateClientForAuthorize(String clientId, String redirectUri) {
+        if (clientId == null || clientId.isBlank()) {
+            throw new AuthException("CLIENT_REQUIRED", "client_id is required");
+        }
+        OAuth2ClientEntity c = clientRepo.findById(clientId)
+                .orElseThrow(() -> new AuthException("CLIENT_NOT_FOUND", "客户端不存在"));
+        Set<String> grants = new HashSet<>(Arrays.asList(c.getGrantTypes().split(",")));
+        if (!grants.contains("authorization_code")) {
+            throw new AuthException("GRANT_NOT_ALLOWED", "客户端未授权该 grant_type");
+        }
+        if (redirectUri != null && c.getRedirectUris() != null) {
+            List<String> allowed = Arrays.asList(c.getRedirectUris().split(","));
+            if (!allowed.contains(redirectUri)) {
+                throw new AuthException("REDIRECT_NOT_ALLOWED", "redirect_uri 不在白名单");
+            }
         }
         return c;
     }
@@ -304,6 +346,24 @@ public class OAuth2AuthService {
         Set<String> want = new HashSet<>(Arrays.asList(requested.split("[ ,]")));
         want.retainAll(allowed);
         return String.join(",", want);
+    }
+
+    private List<String> splitScopes(String scopes) {
+        if (scopes == null || scopes.isBlank()) return Collections.emptyList();
+        return Arrays.stream(scopes.split("[, ]"))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    private List<String> filterPermissionsByScopes(List<String> userPerms, List<String> scopes) {
+        if (userPerms == null || userPerms.isEmpty()) return Collections.emptyList();
+        if (scopes == null || scopes.isEmpty()) return userPerms;
+        Set<String> allowed = new HashSet<>(scopes);
+        return userPerms.stream()
+                .filter(allowed::contains)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
     }
 
     @Transactional

@@ -1,6 +1,7 @@
 package com.iam;
 
 import com.iam.app.service.OAuth2AuthService;
+import com.iam.infrastructure.security.JwtTokenService;
 import com.iam.infrastructure.security.AuthCodeStore;
 import com.iam.infrastructure.security.TokenCacheService;
 import com.iam.start.DemoSeeder;
@@ -14,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -25,6 +27,7 @@ import static org.mockito.Mockito.when;
 class OAuth2FlowTest {
 
     @Autowired OAuth2AuthService oauth;
+    @Autowired JwtTokenService jwt;
     @Autowired AuthCodeStore codeStore;
     @Autowired DemoSeeder seeder;
     @MockBean TokenCacheService cache;
@@ -40,7 +43,7 @@ class OAuth2FlowTest {
     void authCodeFlow_issueCode_then_exchange_withIdToken() {
         Long userId = 1L;
         String code = oauth.authorize("demo-client", "http://localhost:5173/callback",
-                "openid,profile", "xyz", null, "S256", "nonce123",
+                "openid,profile,iam:role:create", "xyz", null, "S256", "nonce123",
                 userId, "admin", "default", null);
         assertNotNull(code);
 
@@ -49,6 +52,10 @@ class OAuth2FlowTest {
         assertNotNull(tok.get("access_token"));
         assertEquals(30 * 60L, ((Number) tok.get("expires_in")).longValue());
         assertNotNull(tok.get("id_token"), "OIDC id_token must be issued when scope includes openid");
+        var claims = jwt.parse((String) tok.get("access_token"));
+        assertTrue(claims.get("roles", List.class).contains("ROLE_ADMIN"));
+        assertTrue(claims.get("perms", List.class).contains("iam:role:create"));
+        assertEquals("openid profile iam:role:create", claims.get("scope"));
     }
 
     @Test
@@ -89,14 +96,21 @@ class OAuth2FlowTest {
     void introspect_accessToken_active() {
         Map<String, Object> tok = oauth.token("client_credentials", "demo-client", "demo-secret",
                 null, null, null, null, null, null, "openid");
-        Map<String, Object> ins = oauth.introspect((String) tok.get("access_token"), null, null);
+        Map<String, Object> ins = oauth.introspect((String) tok.get("access_token"), "demo-client", "demo-secret");
         assertEquals(true, ins.get("active"));
     }
 
     @Test
     void introspect_garbageToken_inactive() {
-        Map<String, Object> ins = oauth.introspect("not-a-real-token", null, null);
+        Map<String, Object> ins = oauth.introspect("not-a-real-token", "demo-client", "demo-secret");
         assertEquals(false, ins.get("active"));
+    }
+
+    @Test
+    void introspect_withoutClientAuth_rejected() {
+        Map<String, Object> tok = oauth.token("client_credentials", "demo-client", "demo-secret",
+                null, null, null, null, null, null, "openid");
+        assertThrows(Exception.class, () -> oauth.introspect((String) tok.get("access_token"), null, null));
     }
 
     private static byte[] sha256(String s) {

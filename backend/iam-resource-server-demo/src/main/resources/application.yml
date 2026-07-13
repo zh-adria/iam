@@ -1,0 +1,10 @@
+server:
+  port: 8090
+
+iam:
+  sdk:
+    issuer: iam-platform
+    auth-server-base-url: http://localhost:8080/iam
+    jwks-uri: http://localhost:8080/iam/oauth/jwks
+    exclude-paths:
+      - /actuator/health
