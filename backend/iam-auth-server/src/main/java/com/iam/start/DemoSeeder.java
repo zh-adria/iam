@@ -28,6 +28,16 @@ import java.util.Optional;
 @Profile({"dev", "demo", "test"})
 @RequiredArgsConstructor
 public class DemoSeeder implements CommandLineRunner {
+    private static final List<String> AGENTHUB_PERMISSIONS = List.of(
+            "agent:create", "agent:read", "agent:update", "agent:delete",
+            "function:create", "function:read", "function:update", "function:delete", "function:invoke",
+            "session:create", "session:read", "session:message", "session:delete",
+            "knowledge:create", "knowledge:read", "knowledge:update", "knowledge:delete", "knowledge:search",
+            "workflow:create", "workflow:read", "workflow:update", "workflow:delete", "workflow:execute",
+            "evaluation:read", "evaluation:run",
+            "bot:create", "bot:read", "bot:update", "bot:delete",
+            "trace:read", "audit:read"
+    );
 
     private final TenantRepository tenants;
     private final UserRepository users;
@@ -74,13 +84,14 @@ public class DemoSeeder implements CommandLineRunner {
         grant("ROLE_ADMIN", "iam:menu:dashboard");
         grant("ROLE_USER", "iam:menu:dashboard");
         grant("ROLE_AUDITOR", "iam:menu:dashboard");
+        seedAgentHubPermissions();
 
         Long adminId = upsertUser("admin", "Iam@2026", "admin@iam.local", "13800138000", "default");
         Long aliceId = upsertUser("alice", "User@2026", "alice@iam.local", "13900139000", "default");
         assignRole(adminId, "ROLE_ADMIN");
         assignRole(aliceId, "ROLE_USER");
 
-        String demoClientScopes = "openid,profile,iam:user:assign-role,iam:user:create,iam:user:delete,iam:role:create,iam:role:grant,iam:permission:create,iam:permission:delete,iam:client:create,iam:tenant:write,iam:config:read,iam:audit:read,iam:menu:dashboard";
+        String demoClientScopes = "openid,profile,iam:user:assign-role,iam:user:create,iam:user:delete,iam:role:create,iam:role:grant,iam:permission:create,iam:permission:delete,iam:client:create,iam:tenant:write,iam:config:read,iam:audit:read,iam:menu:dashboard," + String.join(",", AGENTHUB_PERMISSIONS);
         OAuth2ClientEntity demoClient = clients.findById("demo-client").orElseGet(() -> OAuth2ClientEntity.builder()
                 .clientId("demo-client")
                 .clientSecretHash(hasher.encode("demo-secret"))
@@ -154,6 +165,19 @@ public class DemoSeeder implements CommandLineRunner {
     private void upsertPerm(String code, String type, String name) {
         if (!perms.findByCode(code).isPresent()) {
             perms.save(PermissionEntity.builder().code(code).type(type).name(name).build());
+        }
+    }
+
+    private void seedAgentHubPermissions() {
+        for (String permission : AGENTHUB_PERMISSIONS) {
+            upsertPerm(permission, "API", "AgentHub " + permission);
+            grant("ROLE_ADMIN", permission);
+        }
+        for (String permission : List.of("agent:read", "function:read", "session:read", "knowledge:read", "knowledge:search", "workflow:read", "evaluation:read", "bot:read", "trace:read")) {
+            grant("ROLE_USER", permission);
+        }
+        for (String permission : List.of("audit:read", "trace:read", "evaluation:read")) {
+            grant("ROLE_AUDITOR", permission);
         }
     }
     private void grant(String role, String perm) {
